@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Split Settlement Simulator</title>
+<meta name="description" content="Interactive simulation of Hybrid Split Settlement for franchise, multi-merchant and platform onseller networks.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#" aria-label="Split Settlement Simulator home">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M8 16h7l3-6M15 16l3 6M18 10h6M18 22h6M18 16h6" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Split Settlement <em>Simulator</em></span>
+    </a>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="simulate" aria-selected="true">Simulate</button>
+      <button role="tab" data-tab="compare" aria-selected="false">Compare models</button>
+      <button role="tab" data-tab="outputs" aria-selected="false">Settlement outputs</button>
+      <button role="tab" data-tab="business" aria-selected="false">Business case</button>
+      <button role="tab" data-tab="roadmap" aria-selected="false">Roadmap</button>
+    </nav>
+    <button class="icon-btn" id="themeToggle" aria-label="Toggle dark mode" title="Toggle theme">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+<!-- ============================ SIMULATE ============================ -->
+<section class="panel" id="tab-simulate" role="tabpanel">
+  <div class="hero wrap">
+    <div>
+      <p class="eyebrow">Concept simulation · Franchise, multi-merchant &amp; platform onseller networks</p>
+      <h1>Take your cut <span class="hl">before</span> the money lands.</h1>
+      <p class="lede">Hybrid Split Settlement sits on top of bank acquiring rails. Each store keeps its own MID. A split engine takes out HQ royalties and onseller fees, then sends each party's share straight to its own BSB. No one holds merchant funds, and no one has to invoice.</p>
+    </div>
+    <div class="hero-stats" id="heroStats"></div>
+  </div>
+
+  <div class="wrap sim-grid">
+    <!-- Controls -->
+    <aside class="card controls" aria-label="Simulation controls">
+      <h2 class="card-title">Network setup</h2>
+      <label class="field">Network preset
+        <select id="preset">
+          <option value="qsr">QSR franchise (8 stores)</option>
+          <option value="fitness">Fitness &amp; wellness (5 clubs)</option>
+          <option value="marketplace">Services marketplace (10 sellers)</option>
+          <option value="pharmacy">Pharmacy group (6 stores)</option>
+        </select>
+      </label>
+
+      <h3 class="sub">Fee split rules</h3>
+      <div class="slider">
+        <label for="royalty">HQ royalty</label><output id="royaltyOut"></output>
+        <input type="range" id="royalty" min="0" max="12" step="0.25">
+      </div>
+      <div class="slider">
+        <label for="platformFee">Onseller platform fee / txn</label><output id="platformFeeOut"></output>
+        <input type="range" id="platformFee" min="0" max="0.50" step="0.01">
+      </div>
+      <div class="slider">
+        <label for="markup">Onseller markup</label><output id="markupOut"></output>
+        <input type="range" id="markup" min="0" max="100" step="5">
+      </div>
+      <div class="slider">
+        <label for="msf">Acquirer MSF (IC++ blended)</label><output id="msfOut"></output>
+        <input type="range" id="msf" min="0.3" max="2" step="0.05">
+      </div>
+
+      <h3 class="sub">Trading pattern</h3>
+      <div class="slider">
+        <label for="ticket">Average ticket</label><output id="ticketOut"></output>
+        <input type="range" id="ticket" min="5" max="400" step="5">
+      </div>
+      <div class="slider">
+        <label for="volume">Transactions / store / day</label><output id="volumeOut"></output>
+        <input type="range" id="volume" min="20" max="600" step="10">
+      </div>
+      <div class="slider">
+        <label for="refundRate">Refund rate</label><output id="refundRateOut"></output>
+        <input type="range" id="refundRate" min="0" max="10" step="0.5">
+      </div>
+      <div class="slider">
+        <label for="cbRate">Chargeback rate</label><output id="cbRateOut"></output>
+        <input type="range" id="cbRate" min="0" max="2" step="0.05">
+      </div>
+    </aside>
+
+    <!-- Flow -->
+    <div class="card flow-card">
+      <div class="flow-head">
+        <div>
+          <h2 class="card-title">Live flow of funds</h2>
+          <p class="muted small" id="clockLine">Day 1 · 07:00 · trading</p>
+        </div>
+        <div class="player">
+          <button class="btn primary" id="playBtn" aria-pressed="false"><span id="playIcon">▶</span> <span id="playLabel">Start trading</span></button>
+          <label class="speed">Speed
+            <select id="speed">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="3">3×</option>
+              <option value="10">10×</option>
+            </select>
+          </label>
+          <button class="btn" id="dayBtn" title="Run the rest of the day and settle">Fast-forward to close</button>
+          <button class="btn ghost" id="resetBtn">Reset</button>
+        </div>
+      </div>
+
+      <div class="flow-wrap">
+        <svg id="flow" viewBox="0 0 1000 440" role="img" aria-label="Diagram: card payments flow from customers through the bank acquirer to the split engine, which pays out to store, HQ and onseller bank accounts"></svg>
+      </div>
+
+      <div class="legend" aria-label="Legend">
+        <span><i class="sw" style="background:var(--s-store)"></i>Store net</span>
+        <span><i class="sw" style="background:var(--s-hq)"></i>HQ royalty</span>
+        <span><i class="sw" style="background:var(--s-onseller)"></i>Onseller fees</span>
+        <span><i class="sw" style="background:var(--s-msf)"></i>Acquirer MSF</span>
+        <span><i class="sw ring" style="border-color:var(--critical)"></i>Refund / chargeback clawback</span>
+      </div>
+
+      <div class="inject">
+        <span class="muted small">Test edge cases:</span>
+        <button class="btn sm" id="injectSale">+ Big sale ($480)</button>
+        <button class="btn sm" id="injectRefund">↺ Partial refund</button>
+        <button class="btn sm" id="injectCb">⚠ Chargeback</button>
+      </div>
+    </div>
+
+    <!-- Totals + ledger -->
+    <div class="card totals-card">
+      <h2 class="card-title">Today's split so far</h2>
+      <div class="split-bar" id="splitBar" aria-hidden="true"></div>
+      <dl class="totals" id="totals"></dl>
+      <p class="muted small" id="guarantee"></p>
+    </div>
+
+    <div class="card ledger-card">
+      <div class="flow-head">
+        <h2 class="card-title">Transaction ledger</h2>
+        <span class="muted small">Latest 40 events · every split reconciles to the cent</span>
+      </div>
+      <div class="table-scroll">
+        <table class="ledger">
+          <thead><tr><th>Time</th><th>Store / MID</th><th>Type</th><th class="num">Gross</th><th class="num">MSF</th><th class="num">HQ</th><th class="num">Onseller</th><th class="num">Store net</th></tr></thead>
+          <tbody id="ledgerBody"><tr><td colspan="8" class="empty">Press <b>Start trading</b> to run a trading day.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ COMPARE ============================ -->
+<section class="panel" id="tab-compare" role="tabpanel" hidden>
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Same transactions, three ways to settle them</p>
+      <h1>Why the workarounds break</h1>
+      <p class="lede">Every model below settles the <b>same simulated trading</b>. Run more days on the Simulate tab and these numbers update. The figures are projected to one month for the network.</p>
+    </div>
+
+    <div class="assumptions card">
+      <div class="slider inline">
+        <label for="dishonour">Direct debit dishonour rate</label><output id="dishonourOut"></output>
+        <input type="range" id="dishonour" min="0" max="10" step="0.5" value="3">
+      </div>
+      <div class="slider inline">
+        <label for="poolDays">Pooling payout cycle (days)</label><output id="poolDaysOut"></output>
+        <input type="range" id="poolDays" min="1" max="14" step="1" value="7">
+      </div>
+      <div class="slider inline">
+        <label for="adminHrs">HQ finance hours / store / month</label><output id="adminHrsOut"></output>
+        <input type="range" id="adminHrs" min="0" max="10" step="0.5" value="3">
+      </div>
+    </div>
+
+    <div class="models" id="models"></div>
+
+    <div class="card landscape">
+      <h2 class="card-title">Where the hybrid model sits</h2>
+      <div class="land-grid">
+        <div class="land">
+          <h3>Legacy model</h3>
+          <p class="tag">Bank acquirer · 1 MID = 1 BSB</p>
+          <ul><li>Merchant account 1:1</li><li>MID onboarding, disbursement &amp; fees</li><li>Competitive pricing</li><li class="bad">Customers work around it with direct debits or master account pooling</li></ul>
+          <p class="foot">Local + global</p>
+        </div>
+        <div class="land focus">
+          <h3>Hybrid model <span class="pill">Whitespace</span></h3>
+          <p class="tag">Bank acquirer + processor orchestration</p>
+          <ul><li>Merchant account 1:1, <b>franchisee MIDs kept</b></li><li>Processor runs the disbursement &amp; fee engine</li><li>Low compliance &amp; operational burden for HQ</li><li>Direct IC++ rates kept</li></ul>
+          <p class="foot">Australia-specific · too low-yield for global PayFacs · too complex for bank mainframes</p>
+        </div>
+        <div class="land">
+          <h3>Platform / marketplace</h3>
+          <p class="tag">PayFac or PayFac-as-a-service</p>
+          <ul><li>Master merchant with sub-merchants</li><li>Platform handles onboarding, disbursement &amp; fees</li><li class="bad">High compliance risk for HQ</li><li class="bad">Expensive</li></ul>
+          <p class="foot">Global · built for digital marketplaces, not QSR or franchise</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ OUTPUTS ============================ -->
+<section class="panel" id="tab-outputs" role="tabpanel" hidden>
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">The four proof-of-concept deliverables, generated live</p>
+      <h1>Settlement outputs</h1>
+      <p class="lede">These are the files a proof of concept would produce: the rule mapping table, the split payout file, the HQ reconciliation statement and the admin configuration. Each one is built from the simulated trading.</p>
+    </div>
+
+    <div class="card">
+      <div class="flow-head">
+        <h2 class="card-title"><span class="step">1</span> Rule mapping table</h2>
+        <span class="muted small">Edit a store's royalty to override the network default. Changes apply to new transactions.</span>
+      </div>
+      <div class="table-scroll">
+        <table class="grid-table">
+          <thead><tr><th>Split routing</th><th>Store</th><th>MID</th><th>Store BSB / Acct</th><th>HQ BSB</th><th>Onseller BSB</th><th class="num">Royalty %</th><th class="num">Platform fee</th><th class="num">Markup bps</th></tr></thead>
+          <tbody id="rulesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="out-grid">
+      <div class="card">
+        <div class="flow-head">
+          <h2 class="card-title"><span class="step">2</span> Split payout file</h2>
+          <div class="row-gap">
+            <select id="batchDay" aria-label="Settlement day"></select>
+            <button class="btn sm" id="dlPayout">Download CSV</button>
+          </div>
+        </div>
+        <p class="muted small">Payout batch sent to each destination BSB on T+1. Neither the processor nor HQ holds merchant funds.</p>
+        <div class="table-scroll">
+          <table class="grid-table"><thead><tr><th>Payee</th><th>Role</th><th>BSB</th><th>Account</th><th class="num">Amount</th><th>Reference</th></tr></thead><tbody id="payoutBody"></tbody></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="flow-head">
+          <h2 class="card-title"><span class="step">3</span> HQ reconciliation statement</h2>
+          <button class="btn sm" id="dlRecon">Download CSV</button>
+        </div>
+        <p class="muted small">Gross card turnover, then each fee deducted, then net acquirer payout, on one consolidated statement.</p>
+        <div class="table-scroll">
+          <table class="grid-table"><thead><tr><th>Store</th><th class="num">Gross</th><th class="num">Refunds / CB</th><th class="num">MSF</th><th class="num">Royalty</th><th class="num">Onseller</th><th class="num">Net deposit</th></tr></thead><tbody id="reconBody"></tbody><tfoot id="reconFoot"></tfoot></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title"><span class="step">4</span> Pilot setup config</h2>
+      <p class="muted small">A simple back-end admin view: switch split routing on for a merchant group and pick how clawbacks are handled.</p>
+      <div class="config">
+        <label class="switch"><input type="checkbox" id="cfgEnabled" checked><span></span> Split routing enabled for this group</label>
+        <label class="switch"><input type="checkbox" id="cfgProRate" checked><span></span> Pro-rate fee clawback on refunds</label>
+        <label class="switch"><input type="checkbox" id="cfgCbClaw" checked><span></span> Claw back HQ &amp; onseller fees on chargebacks</label>
+        <label class="switch"><input type="checkbox" id="cfgNetOff" checked><span></span> Net negative store balances against the next batch</label>
+        <label class="field inline">Chargeback fee (store)
+          <input type="number" id="cfgCbFee" min="0" max="100" step="1" value="25">
+        </label>
+      </div>
+      <pre class="code" id="cfgJson" aria-label="Configuration JSON"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ BUSINESS ============================ -->
+<section class="panel" id="tab-business" role="tabpanel" hidden>
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Revenue sensitivities &amp; high-level financials</p>
+      <h1>Business case</h1>
+      <p class="lede">Australian online and ecommerce spend is <b>$82.6B</b>, growing about 14% a year. Franchise networks and marketplaces together make up <b>$28.5B</b> of it. Move the levers to test the revenue, cost and net position.</p>
+    </div>
+
+    <div class="biz-grid">
+      <div class="card">
+        <h2 class="card-title">Levers</h2>
+        <h3 class="sub">New business</h3>
+        <div class="slider"><label for="bNewTtv">TTV won</label><output id="bNewTtvOut"></output><input type="range" id="bNewTtv" min="50" max="4000" step="50" value="1000"></div>
+        <div class="slider"><label for="bNewBps">Margin</label><output id="bNewBpsOut"></output><input type="range" id="bNewBps" min="1" max="20" step="1" value="10"></div>
+        <h3 class="sub">Existing backbook uplift</h3>
+        <div class="slider"><label for="bExTtv">Backbook TTV using workarounds</label><output id="bExTtvOut"></output><input type="range" id="bExTtv" min="0" max="1000" step="50" value="500"></div>
+        <div class="slider"><label for="bExBps">Uplift</label><output id="bExBpsOut"></output><input type="range" id="bExBps" min="0" max="5" step="0.5" value="2"></div>
+        <h3 class="sub">Churn reduction</h3>
+        <div class="slider"><label for="bRev">Revenue base p.a.</label><output id="bRevOut"></output><input type="range" id="bRev" min="10" max="200" step="5" value="50"></div>
+        <div class="slider"><label for="bChurn">Churn avoided</label><output id="bChurnOut"></output><input type="range" id="bChurn" min="0" max="3" step="0.25" value="1"></div>
+        <h3 class="sub">Ongoing costs</h3>
+        <div class="slider"><label for="bFte">Engineering FTE</label><output id="bFteOut"></output><input type="range" id="bFte" min="0.5" max="4" step="0.5" value="1.5"></div>
+        <div class="slider"><label for="bComp">Compliance &amp; audit</label><output id="bCompOut"></output><input type="range" id="bComp" min="25" max="50" step="5" value="35"></div>
+        <div class="slider"><label for="bOps">Ops &amp; exception support</label><output id="bOpsOut"></output><input type="range" id="bOps" min="25" max="50" step="5" value="35"></div>
+      </div>
+
+      <div class="biz-right">
+        <div class="kpis" id="kpis"></div>
+        <div class="card">
+          <h2 class="card-title">Annual revenue vs cost</h2>
+          <div id="waterfall" class="chart" role="img" aria-label="Bar chart: revenue components, costs and net position"></div>
+        </div>
+        <div class="card">
+          <div class="flow-head">
+            <h2 class="card-title">New business sensitivity ($M p.a.)</h2>
+            <span class="muted small">Your current selection is outlined</span>
+          </div>
+          <div class="table-scroll"><table class="heat" id="heat"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Ecommerce volume by segment (TAM)</h2>
+      <div class="table-scroll">
+        <table class="grid-table">
+          <thead><tr><th>Segment</th><th class="num">TTV</th><th class="num">Share</th><th>Growth</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Large corporate chains</td><td class="num">$35.0B</td><td class="num">42%</td><td>14–18%</td><td class="muted">Standouts (Coles, Amazon) pull it above market; department stores pull it down</td></tr>
+            <tr class="target"><td>Marketplace (multi-sellers) <span class="pill">Target</span></td><td class="num">$18.9B</td><td class="num">23%</td><td>~13%</td><td class="muted">Ticketing and events, services, vertical/niche</td></tr>
+            <tr class="target"><td>Franchisee networks <span class="pill">Target</span></td><td class="num">$9.6B</td><td class="num">12%</td><td>10–15%</td><td class="muted">Pharmacy/health, QSR/specialty retail, fitness and wellness</td></tr>
+            <tr><td>Independent / DTC sellers</td><td class="num">$19.1B</td><td class="num">23%</td><td>13–17%</td><td class="muted">Mostly new, high-growth companies</td></tr>
+            <tr class="total"><td>Total online/ecomm spend</td><td class="num">$82.6B</td><td class="num">100%</td><td>+14% YoY</td><td class="muted">Australia Post / CommBank iQ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ROADMAP ============================ -->
+<section class="panel" id="tab-roadmap" role="tabpanel" hidden>
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">From discovery to productisation</p>
+      <h1>Roadmap</h1>
+      <p class="lede">Click a stage to see what it involves. Tick items off to track readiness. Your ticks are saved in this browser only.</p>
+    </div>
+    <ol class="stages" id="stages"></ol>
+    <div class="card" id="stageDetail"></div>
+  </div>
+</section>
+</main>
+
+<footer class="wrap foot-note">
+  <p>Concept simulation for discussion only. All merchants, MIDs, BSBs and amounts are fictional. Rates and market figures come from the Hybrid Split Settlement pitch.</p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
