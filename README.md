@@ -13,3 +13,7 @@ Open `index.html` in a browser. There is no build step and nothing to install.
 - **Roadmap**: discovery, POC, MVP and later stages, with a checklist saved in the browser.
 
 All merchants, MIDs, BSBs and amounts are fictional.
+
+---
+
+Also in this repo: [**Sydney Hoops Stats**](hoops/): search a player's stats across Sydney local basketball comps (Sydney Social Basketball, The U League). See [hoops/README.md](hoops/README.md).
