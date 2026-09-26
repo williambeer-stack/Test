@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nameKey, cleanName, splitSeason, parseRobots } from '../lib/index.mjs';
 import { scrapeSsb, loadCache, upsertMatch, aggregate } from '../lib/ssb.mjs';
-import { scrapeCupManager, linesFromTournament, seasonLabel, matchRecord, attachGames } from '../lib/cupmanager.mjs';
+import { scrapeCupManager, linesFromTournament, seasonLabel, matchRecord, attachGames, finishedMatchIds } from '../lib/cupmanager.mjs';
 import { buildDataset, shardOf, SHARDS } from '../lib/dataset.mjs';
 
 const fx = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8');
@@ -110,6 +110,10 @@ test('Cup Manager: normalised response resolves to player lines', () => {
   ]);
 });
 
+test('Cup Manager: finished matches are found via team match lists', () => {
+  assert.deepEqual([...finishedMatchIds(JSON.parse(fx('cm-players.json')).responses)], ['5001'], 'unfinished match skipped');
+});
+
 test('Cup Manager: match feed becomes a box score and attaches to season lines', () => {
   const r = matchRecord(JSON.parse(fx('cm-match.json')).responses, '5001');
   assert.deepEqual(r, ['2026-05-24', 'Sydney Uni - Division 1', 'Airballers', 'Swishers', 73, 61, [
@@ -132,7 +136,7 @@ test('Cup Manager: discovers seasons, fetches and caches box scores', async () =
   assert.equal(method, 'Cup Manager results API');
   assert.equal(lines.length, 2);
   assert.ok(requests.some((r) => r.includes('tournamentId=901')), 'edition found via API was tried');
-  assert.equal(lines[0].games.length, 1);
+  assert.equal(lines[0].games.length, 1, 'match found via team list, not the short finished list');
   const cached = JSON.parse(await readFile(join(cacheDir, 'uleague', 'matches.json'), 'utf8'));
   assert.ok(cached['5001'].r, 'box score cached');
   assert.equal(cached['5002'].r, null, 'match without stats remembered');

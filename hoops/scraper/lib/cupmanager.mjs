@@ -13,7 +13,9 @@ import { getJson, getText } from './http.mjs';
 import { clean, nameKey } from './parse.mjs';
 
 const EDITION_RE = /\/(\d{4}),(\d+)(?:,[^/]*)?(?=\/|$)/;
-const PLAYERS_QUERY = (tid) => `Tournament({id:${tid}}){lotCategories:[{topPlayers:[{stats:{},team:{club:{}}}]}]}`;
+// Asking for each player's team matches as well lists every match in the season in the
+// same call (the tournament's own finishedMatches list only holds the latest few).
+const PLAYERS_QUERY = (tid) => `Tournament({id:${tid}}){lotCategories:[{topPlayers:[{stats:{},team:{club:{},matches:[{}]}}]}]}`;
 const EDITIONS_QUERY = (tid) => `Tournament({id:${tid}}){cup:{editions:[{}]}}`;
 const MATCHES_QUERY = (tid) => `Tournament({id:${tid}}){finishedMatches:[{}]}`;
 const MATCH_QUERY = (mid) => `Match({id:${mid}}){feed:{statistics:{}},home:{team:{}},away:{team:{}},division:{category:{}},result:{}}`;
@@ -98,24 +100,32 @@ async function saveMatches(file, matches) {
   await writeFile(file, `{\n${[...matches].map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`).join(',\n')}\n}\n`);
 }
 
+// Finished match ids found anywhere in a response.
+export function finishedMatchIds(responses) {
+  const ids = new Set();
+  for (const [href, { entity } = {}] of Object.entries(responses)) {
+    const m = /^Match\(\{id:(\d+)\}\)$/.exec(href);
+    if (m && entity?.finished) ids.add(m[1]);
+  }
+  return ids;
+}
+
 // Fetch box scores for finished matches not yet cached. Returns the number fetched.
-async function crawlMatches(base, tids, matches, file, log) {
+// known: Map<tid, Set<matchId>> found while reading season totals.
+async function crawlMatches(base, known, matches, file, log) {
   const budget = Number(process.env.UL_MAX_MATCHES ?? 4000);
   let fetched = 0;
-  for (const tid of tids) {
-    let ids = [];
+  for (const [tid, found] of known) {
+    const ids = new Set(found);
     try {
-      const responses = await call(base, tid, MATCHES_QUERY(tid));
-      const deref = resolver(responses);
-      ids = (deref(responses[`Tournament({id:${tid}})`]?.entity?.finishedMatches) || []).map((m) => String(m.id)).filter(Boolean);
+      for (const id of finishedMatchIds(await call(base, tid, MATCHES_QUERY(tid)))) ids.add(id);
     } catch (err) {
       log(`  ! match list for ${tid}: ${err.message}`);
-      continue;
     }
     // Matches with no box score yet are retried after a week (stats are sometimes entered late).
     const retryBefore = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
-    const todo = ids.filter((id) => !matches.has(id) || (!matches.get(id).r && (matches.get(id).at ?? '') < retryBefore));
-    log(`  tournament ${tid}: ${ids.length} finished matches, ${todo.length} to fetch`);
+    const todo = [...ids].filter((id) => !matches.has(id) || (!matches.get(id).r && (matches.get(id).at ?? '') < retryBefore));
+    log(`  tournament ${tid}: ${ids.size} finished matches, ${todo.length} to fetch`);
     for (const mid of todo) {
       if (fetched >= budget) return fetched;
       try {
@@ -205,10 +215,13 @@ export async function scrapeCupManager(source, log, { cacheDir } = {}) {
   const tids = await discoverTournaments(source, log);
   log(`  ${tids.length} seasons/events found`);
   const lines = [];
+  const known = new Map();
   let failures = 0;
   for (const tid of tids) {
     try {
-      const got = linesFromTournament(await call(base, tid, PLAYERS_QUERY(tid)), tid, base);
+      const responses = await call(base, tid, PLAYERS_QUERY(tid));
+      known.set(String(tid), finishedMatchIds(responses));
+      const got = linesFromTournament(responses, tid, base);
       if (got.length) log(`  ${got[0].season}: ${got.length} player lines`);
       lines.push(...got);
     } catch (err) {
@@ -220,7 +233,7 @@ export async function scrapeCupManager(source, log, { cacheDir } = {}) {
   if (cacheDir && lines.length) {
     const file = join(cacheDir, source.id, 'matches.json');
     const matches = await loadMatches(file);
-    const fetched = await crawlMatches(base, tids, matches, file, log);
+    const fetched = await crawlMatches(base, known, matches, file, log);
     await saveMatches(file, matches);
     attachGames(lines, matches);
     log(`  box scores: ${matches.size} matches cached (${fetched} fetched this run)`);

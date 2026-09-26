@@ -11,19 +11,9 @@
   "Tournament({id:900})$finishedMatches": {
    "entity": [
     {
-     "href": "Match({id:5001})"
-    },
-    {
      "href": "Match({id:5002})"
     }
    ]
-  },
-  "Match({id:5001})": {
-   "entity": {
-    "__typename": "Match",
-    "id": 5001,
-    "finished": true
-   }
   },
   "Match({id:5002})": {
    "entity": {

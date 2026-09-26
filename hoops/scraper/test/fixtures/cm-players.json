@@ -153,6 +153,9 @@
     },
     "club": {
      "href": "NameClub({id:80})"
+    },
+    "matches": {
+     "href": "Team({id:70})$matches"
     }
    }
   },
@@ -173,6 +176,33 @@
     "__typename": "NameClub",
     "name": "Airballers",
     "id": 80
+   }
+  },
+  "Team({id:70})$matches": {
+   "cachetags": [],
+   "entity": [
+    {
+     "href": "Match({id:5001})"
+    },
+    {
+     "href": "Match({id:5003})"
+    }
+   ]
+  },
+  "Match({id:5001})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Match",
+    "id": 5001,
+    "finished": true
+   }
+  },
+  "Match({id:5003})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Match",
+    "id": 5003,
+    "finished": false
    }
   }
  }
