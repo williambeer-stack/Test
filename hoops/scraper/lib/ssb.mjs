@@ -145,15 +145,16 @@ async function crawl(source, cache, dir, log) {
 // the team present in every match they appear in (falling back to the most common one).
 export function aggregate(cache, base) {
   const acc = new Map();
-  for (const [date, division, homeId, homeName, awayId, awayName, , rows] of cache.matches.values()) {
+  for (const [mid, [date, division, homeId, homeName, awayId, awayName, , rows]] of cache.matches) {
     for (const [uid, pts, reb, ast, stl, blk] of rows) {
       const key = `${uid}|${division}`;
       let a = acc.get(key);
       if (!a) {
-        a = { uid, division, year: date.slice(0, 4), gp: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, teams: new Map() };
+        a = { uid, division, year: date.slice(0, 4), gp: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, teams: new Map(), games: [] };
         acc.set(key, a);
       }
       a.gp++; a.pts += pts; a.reb += reb; a.ast += ast; a.stl += stl; a.blk += blk;
+      a.games.push([date, homeId, awayId, pts, reb, ast, stl, blk, mid]);
       for (const [id, name] of [[homeId, homeName], [awayId, awayName]]) {
         const t = a.teams.get(id) || { name, n: 0 };
         t.n++;
@@ -169,6 +170,18 @@ export function aggregate(cache, base) {
     const top = ranked.filter((t) => t.n === ranked[0].n);
     const { comp, season } = splitSeason(a.division, a.year);
     const profile = slug ? `${base}/player-profile/${slug}/` : null;
+    const mine = new Set([...a.teams].filter(([, t]) => t.n === ranked[0].n).map(([id]) => id));
+    const nameOf = (id) => a.teams.get(id)?.name ?? '';
+    // Game rows: [date, opponent, result, pts, reb, ast, stl, blk, threes, matchId]. Box scores
+    // carry no team scores, so result is null; when the player's team is ambiguous both sides show.
+    const games = a.games
+      .map(([date, homeId, awayId, pts, reb, ast, stl, blk, mid]) => {
+        const opp = mine.size === 1
+          ? nameOf(mine.has(homeId) ? awayId : homeId)
+          : `${nameOf(homeId)} v ${nameOf(awayId)}`;
+        return [date, opp, null, pts, reb, ast, stl, blk, null, Number(mid)];
+      })
+      .sort((x, y) => x[0].localeCompare(y[0]));
     lines.push({
       name,
       key: `ssb:${a.uid}`,
@@ -177,6 +190,8 @@ export function aggregate(cache, base) {
       season,
       gp: a.gp, pts: a.pts, reb: a.reb, ast: a.ast, stl: a.stl, blk: a.blk,
       url: profile,
+      games,
+      gameUrl: `${base}/?p={id}`,
     });
   }
   return lines;

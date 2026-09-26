@@ -16,6 +16,8 @@ function toEntry(line, src) {
   const e = { src, comp: clean(line.competition), season: clean(line.season), team: clean(line.team) };
   for (const k of STAT_KEYS) if (line[k] != null) e[k] = line[k];
   if (line.url) e.url = line.url;
+  if (line.games?.length) e.games = line.games;
+  if (line.gameUrl && line.games?.length) e.gameUrl = line.gameUrl;
   if (line.stale) e.stale = true;
   return e;
 }

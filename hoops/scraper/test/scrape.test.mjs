@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nameKey, cleanName, splitSeason, parseRobots } from '../lib/index.mjs';
 import { scrapeSsb, loadCache, upsertMatch, aggregate } from '../lib/ssb.mjs';
-import { scrapeCupManager, linesFromTournament, seasonLabel } from '../lib/cupmanager.mjs';
+import { scrapeCupManager, linesFromTournament, seasonLabel, matchRecord, attachGames } from '../lib/cupmanager.mjs';
 import { buildDataset, shardOf, SHARDS } from '../lib/dataset.mjs';
 
 const fx = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8');
@@ -37,6 +37,9 @@ before(async () => {
     if (u.pathname === '/rest/results_api/call') {
       const q = u.searchParams.get('call');
       if (/editions/.test(q)) return send('text/plain', fx('cm-editions.json'));
+      if (/finishedMatches/.test(q)) return send('text/plain', fx('cm-finished.json'));
+      if (q.startsWith('Match({id:5001})')) return send('text/plain', fx('cm-match.json'));
+      if (q.startsWith('Match({id:5002})')) return send('text/plain', '{"responses":{}}');
       if (u.searchParams.get('tournamentId') === '900') return send('text/plain', fx('cm-players.json'));
     }
     res.writeHead(404);
@@ -66,9 +69,16 @@ test('SSB: box scores aggregate per player and division, team inferred', async (
   assert.deepEqual(ava, {
     name: 'Ava Example', key: 'ssb:101', team: 'Hoop Troop', competition: 'Glebe Tuesday (Mens)', season: '2025 S1',
     gp: 2, pts: 34, reb: 12, ast: 5, stl: 1, blk: 1, url: 'https://ssb.test/player-profile/avaex/',
+    games: [
+      ['2025-03-01', 'Net Gains', null, 20, 5, 3, 1, 0, null, 10],
+      ['2025-03-08', 'Brick Layers', null, 14, 7, 2, 0, 1, null, 11],
+    ],
+    gameUrl: 'https://ssb.test/?p={id}',
   });
   // One game only: both teams are possible, so both are shown.
-  assert.equal(lines.find((l) => l.name === 'Dee Test').team, 'Brick Layers / Hoop Troop');
+  const dee = lines.find((l) => l.name === 'Dee Test');
+  assert.equal(dee.team, 'Brick Layers / Hoop Troop');
+  assert.equal(dee.games[0][1], 'Brick Layers v Hoop Troop');
   assert.equal(lines.find((l) => l.name === 'Dee Test').blk, 0, 'blank stat counts as zero');
 });
 
@@ -93,17 +103,43 @@ test('SSB: backfill, cache round-trip, then incremental run', async () => {
 
 test('Cup Manager: normalised response resolves to player lines', () => {
   const lines = linesFromTournament(JSON.parse(fx('cm-players.json')).responses, '900', 'https://ul.test');
+  const common = { tid: '900', season: '2026 Season 1', url: 'https://ul.test/2026,1,en/result/statistics/players', gameUrl: 'https://ul.test/2026,1,en/result/match/{id}' };
   assert.deepEqual(lines, [
-    { name: 'Ava Example', team: 'Airballers', competition: 'Sydney Uni - Division 1', season: '2026 Season 1', gp: 7, pts: 141, ast: 20, reb: 40, stl: 9, blk: 3, url: 'https://ul.test/2026,1,en/result/statistics/players' },
-    { name: 'Mia Placeholder', team: 'Swishers', competition: 'Concord Wednesdays', season: '2026 Season 1', gp: 6, pts: 98, ast: 5, stl: 2, blk: 0, url: 'https://ul.test/2026,1,en/result/statistics/players' },
+    { name: 'Ava Example', team: 'Airballers', competition: 'Sydney Uni - Division 1', gp: 7, pts: 141, ast: 20, reb: 40, stl: 9, blk: 3, ...common },
+    { name: 'Mia Placeholder', team: 'Swishers', competition: 'Concord Wednesdays', gp: 6, pts: 98, ast: 5, stl: 2, blk: 0, ...common },
   ]);
 });
 
-test('Cup Manager: discovers seasons and survives one failing season', async () => {
-  const { lines, method } = await scrapeCupManager({ base, indexPages: [`${base}/`] }, quiet);
+test('Cup Manager: match feed becomes a box score and attaches to season lines', () => {
+  const r = matchRecord(JSON.parse(fx('cm-match.json')).responses, '5001');
+  assert.deepEqual(r, ['2026-05-24', 'Sydney Uni - Division 1', 'Airballers', 'Swishers', 73, 61, [
+    ['home', 'Ava Example', 26, 10, 2, 2, 1, 3],
+    ['away', 'Mia Placeholder', 25, 4, 0, 1, 0, 1],
+  ]], 'player who did not play is left out');
+  const lines = [
+    { name: 'Ava Example', tid: '900', team: 'Airballers', competition: 'Sydney Uni - Division 1' },
+    { name: 'Mia Placeholder', tid: '900', team: 'Swishers', competition: 'Concord Wednesdays' },
+  ];
+  attachGames(lines, new Map([['5001', { t: '900', r }]]));
+  assert.deepEqual(lines[0].games, [['2026-05-24', 'Swishers', 'W 73–61', 26, 10, 2, 2, 1, 3, '5001']]);
+  assert.equal(lines[1].games, undefined, 'different division, so not attached');
+});
+
+test('Cup Manager: discovers seasons, fetches and caches box scores', async () => {
+  const cacheDir = await mkdtemp(join(tmpdir(), 'cm-'));
+  const source = { id: 'uleague', base, indexPages: [`${base}/`] };
+  const { lines, method } = await scrapeCupManager(source, quiet, { cacheDir });
   assert.equal(method, 'Cup Manager results API');
   assert.equal(lines.length, 2);
   assert.ok(requests.some((r) => r.includes('tournamentId=901')), 'edition found via API was tried');
+  assert.equal(lines[0].games.length, 1);
+  const cached = JSON.parse(await readFile(join(cacheDir, 'uleague', 'matches.json'), 'utf8'));
+  assert.ok(cached['5001'].r, 'box score cached');
+  assert.equal(cached['5002'].r, null, 'match without stats remembered');
+
+  requests.length = 0;
+  await scrapeCupManager(source, quiet, { cacheDir });
+  assert.ok(!requests.some((r) => /Match%28%7Bid%3A500/.test(r)), 'cached matches are not fetched again');
 });
 
 test('dataset: merges people across sources into index + shards', () => {

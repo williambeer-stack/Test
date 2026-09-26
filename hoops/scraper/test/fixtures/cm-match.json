@@ -1,0 +1,173 @@
+{
+ "responses": {
+  "Match({id:5001})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Match",
+    "id": 5001,
+    "start": 1779612600000,
+    "finished": true,
+    "feed": {
+     "href": "MatchFeed({id:5001})"
+    },
+    "home": {
+     "href": "MatchActor({id:1,side:home})"
+    },
+    "away": {
+     "href": "MatchActor({id:1,side:away})"
+    },
+    "division": {
+     "href": "Division({id:9})"
+    },
+    "result": {
+     "href": "MatchResult({id:5001})"
+    }
+   }
+  },
+  "MatchFeed({id:5001})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "MatchFeed",
+    "statistics": {
+     "href": "MatchFeed({id:5001})$statistics"
+    }
+   }
+  },
+  "MatchFeed({id:5001})$statistics": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "MatchFeed$EventStatistics",
+    "home": {
+     "__typename": "EventStatistics$TeamStats",
+     "goals": 73,
+     "players": [
+      {
+       "__typename": "EventStatistics$PlayerStat",
+       "playerId": 77,
+       "name": "Ava Example",
+       "shirtNr": 7,
+       "goals": 26,
+       "assists": 2,
+       "shots": 26,
+       "threePointers": 3,
+       "twoPointers": 0,
+       "onePointers": 0,
+       "rebounds": 10,
+       "blockedShots": 1,
+       "steals": 2,
+       "matches": 1,
+       "fouls": [],
+       "mvp": 0
+      },
+      {
+       "__typename": "EventStatistics$PlayerStat",
+       "playerId": 1089,
+       "name": "Bench Warmer",
+       "shirtNr": 99,
+       "goals": 0,
+       "assists": 0,
+       "shots": 0,
+       "threePointers": 0,
+       "twoPointers": 0,
+       "onePointers": 0,
+       "rebounds": 0,
+       "blockedShots": 0,
+       "steals": 0,
+       "matches": 0,
+       "fouls": [],
+       "mvp": 0
+      }
+     ]
+    },
+    "away": {
+     "__typename": "EventStatistics$TeamStats",
+     "goals": 61,
+     "players": [
+      {
+       "__typename": "EventStatistics$PlayerStat",
+       "playerId": 44,
+       "name": "Mia Placeholder",
+       "shirtNr": 4,
+       "goals": 25,
+       "assists": 0,
+       "shots": 25,
+       "threePointers": 1,
+       "twoPointers": 0,
+       "onePointers": 0,
+       "rebounds": 4,
+       "blockedShots": 0,
+       "steals": 1,
+       "matches": 1,
+       "fouls": [],
+       "mvp": 0
+      }
+     ]
+    }
+   }
+  },
+  "MatchActor({id:1,side:home})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "MatchActor",
+    "team": {
+     "href": "Team({id:70})"
+    }
+   }
+  },
+  "MatchActor({id:1,side:away})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "MatchActor",
+    "team": {
+     "href": "Team({id:71})"
+    }
+   }
+  },
+  "Team({id:70})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Team",
+    "name": {
+     "__typename": "Team$TeamName",
+     "clubName": "Airballers",
+     "fullName": "Airballers Sydney Uni - Division 1"
+    }
+   }
+  },
+  "Team({id:71})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Team",
+    "name": {
+     "__typename": "Team$TeamName",
+     "clubName": "Swishers",
+     "fullName": "Swishers Sydney Uni - Division 1"
+    }
+   }
+  },
+  "Division({id:9})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Division",
+    "category": {
+     "href": "Category({categoryId:50,tournamentId:900})"
+    }
+   }
+  },
+  "Category({categoryId:50,tournamentId:900})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Category",
+    "name": "Sydney Uni - Division 1"
+   }
+  },
+  "MatchResult({id:5001})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "MatchResult",
+    "homeGoals": 73,
+    "awayGoals": 61
+   }
+  }
+ }
+}
