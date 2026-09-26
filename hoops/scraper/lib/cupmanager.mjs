@@ -4,14 +4,21 @@
 //   GET /rest/results_api/call?call=<query>&tournamentId=<id>
 // Responses are normalised: { responses: { "<href>": { entity } } }, where nested
 // objects are references like { href: "Player({id:1})" }. One query per season
-// returns every division's players with season totals.
+// returns every division's players with season totals; per-game box scores come
+// from each finished match's feed statistics, cached so each match is fetched once.
 
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { getJson, getText } from './http.mjs';
-import { clean } from './parse.mjs';
+import { clean, nameKey } from './parse.mjs';
 
 const EDITION_RE = /\/(\d{4}),(\d+)(?:,[^/]*)?(?=\/|$)/;
-const PLAYERS_QUERY = (tid) => `Tournament({id:${tid}}){lotCategories:[{topPlayers:[{stats:{},team:{club:{}}}]}]}`;
+// Asking for each player's team matches as well lists every match in the season in the
+// same call (the tournament's own finishedMatches list only holds the latest few).
+const PLAYERS_QUERY = (tid) => `Tournament({id:${tid}}){lotCategories:[{topPlayers:[{stats:{},team:{club:{},matches:[{}]}}]}]}`;
 const EDITIONS_QUERY = (tid) => `Tournament({id:${tid}}){cup:{editions:[{}]}}`;
+const MATCHES_QUERY = (tid) => `Tournament({id:${tid}}){finishedMatches:[{}]}`;
+const MATCH_QUERY = (mid) => `Match({id:${mid}}){feed:{statistics:{}},home:{team:{}},away:{team:{}},division:{category:{}},result:{}}`;
 
 async function call(base, tid, query) {
   const qs = new URLSearchParams({ call: query, lang: 'en', tournamentId: String(tid) });
@@ -39,6 +46,103 @@ export function seasonLabel(fullname) {
   return m ? clean(`${m[1]} ${m[2]}`) : clean(fullname);
 }
 
+const teamName = (team, deref) => (team?.name && typeof team.name === 'object'
+  ? team.name.clubName || team.name.fullName
+  : team?.name || deref(team?.club)?.name || '');
+
+// One finished match -> [date, category, home, away, homeScore, awayScore, rows]
+// with rows [side, name, pts, reb, ast, stl, blk, threes].
+export function matchRecord(responses, mid) {
+  const deref = resolver(responses);
+  const m = responses[`Match({id:${mid}})`]?.entity;
+  if (!m) return null;
+  const stats = deref(deref(m.feed)?.statistics);
+  if (!stats) return null;
+  const side = (s) => clean(teamName(deref(deref(m[s])?.team), deref));
+  const result = deref(m.result) || {};
+  const rows = [];
+  for (const s of ['home', 'away']) {
+    for (const p of stats[s]?.players || []) {
+      if (!p.name || !(p.matches > 0)) continue;
+      rows.push([s, clean(p.name), p.goals ?? 0, p.rebounds ?? 0, p.assists ?? 0, p.steals ?? 0, p.blockedShots ?? 0, p.threePointers ?? 0]);
+    }
+  }
+  if (!rows.length) return null;
+  const category = clean(deref(deref(m.division)?.category)?.name);
+  const date = m.start ? new Date(m.start).toISOString().slice(0, 10) : '';
+  return [date, category, side('home'), side('away'), result.homeGoals ?? null, result.awayGoals ?? null, rows];
+}
+
+// Game rows per player: [date, opponent, result, pts, reb, ast, stl, blk, threes, matchId]
+export function attachGames(lines, matches) {
+  const byKey = new Map(lines.map((l) => [`${l.tid}|${l.competition}|${nameKey(l.name)}|${l.team.toLowerCase()}`, l]));
+  for (const [mid, { t, r }] of matches) {
+    if (!r) continue;
+    const [date, category, home, away, hs, as, rows] = r;
+    for (const [s, name, pts, reb, ast, stl, blk, threes] of rows) {
+      const team = s === 'home' ? home : away;
+      const line = byKey.get(`${t}|${category}|${nameKey(name)}|${team.toLowerCase()}`);
+      if (!line) continue;
+      const [mine, theirs] = s === 'home' ? [hs, as] : [as, hs];
+      const result = mine == null || theirs == null ? null : `${mine > theirs ? 'W' : mine < theirs ? 'L' : 'D'} ${mine}–${theirs}`;
+      (line.games ??= []).push([date, s === 'home' ? away : home, result, pts, reb, ast, stl, blk, threes, mid]);
+    }
+  }
+  for (const l of lines) l.games?.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+async function loadMatches(file) {
+  try { return new Map(Object.entries(JSON.parse(await readFile(file, 'utf8')))); } catch { return new Map(); }
+}
+
+async function saveMatches(file, matches) {
+  await mkdir(join(file, '..'), { recursive: true });
+  await writeFile(file, `{\n${[...matches].map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`).join(',\n')}\n}\n`);
+}
+
+// Finished match ids found anywhere in a response.
+export function finishedMatchIds(responses) {
+  const ids = new Set();
+  for (const [href, { entity } = {}] of Object.entries(responses)) {
+    const m = /^Match\(\{id:(\d+)\}\)$/.exec(href);
+    if (m && entity?.finished) ids.add(m[1]);
+  }
+  return ids;
+}
+
+// Fetch box scores for finished matches not yet cached. Returns the number fetched.
+// known: Map<tid, Set<matchId>> found while reading season totals.
+async function crawlMatches(base, known, matches, file, log) {
+  const budget = Number(process.env.UL_MAX_MATCHES ?? 4000);
+  let fetched = 0;
+  for (const [tid, found] of known) {
+    const ids = new Set(found);
+    try {
+      for (const id of finishedMatchIds(await call(base, tid, MATCHES_QUERY(tid)))) ids.add(id);
+    } catch (err) {
+      log(`  ! match list for ${tid}: ${err.message}`);
+    }
+    // Matches with no box score yet are retried after a week (stats are sometimes entered late).
+    const retryBefore = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+    const todo = [...ids].filter((id) => !matches.has(id) || (!matches.get(id).r && (matches.get(id).at ?? '') < retryBefore));
+    log(`  tournament ${tid}: ${ids.size} finished matches, ${todo.length} to fetch`);
+    for (const mid of todo) {
+      if (fetched >= budget) return fetched;
+      try {
+        const r = matchRecord(await call(base, tid, MATCH_QUERY(mid)), mid);
+        matches.set(mid, r ? { t: tid, r } : { t: tid, r: null, at: new Date().toISOString().slice(0, 10) });
+      } catch (err) {
+        log(`  ! match ${mid}: ${err.message}`);
+      }
+      if (++fetched % 100 === 0) {
+        log(`  …${fetched} matches fetched`);
+        await saveMatches(file, matches);
+      }
+    }
+  }
+  return fetched;
+}
+
 export function linesFromTournament(responses, tid, base) {
   const deref = resolver(responses);
   const t = responses[`Tournament({id:${tid}})`]?.entity;
@@ -51,13 +155,10 @@ export function linesFromTournament(responses, tid, base) {
     for (const p of deref(cat.topPlayers) || []) {
       const s = p.stats || {};
       if (!p.name || !(s.games > 0)) continue;
-      const team = deref(p.team);
-      const teamName = team?.name && typeof team.name === 'object'
-        ? team.name.clubName || team.name.fullName
-        : team?.name || deref(team?.club)?.name || '';
       lines.push({
         name: clean(p.name),
-        team: clean(teamName),
+        tid: String(tid),
+        team: clean(teamName(deref(p.team), deref)),
         competition: clean(cat.name || cat.shortName),
         season,
         gp: s.games,
@@ -67,6 +168,7 @@ export function linesFromTournament(responses, tid, base) {
         ...(cat.registerSteals === false ? {} : { stl: s.steals ?? 0 }),
         ...(cat.registerBlocks === false ? {} : { blk: s.blockedShots ?? 0 }),
         url,
+        gameUrl: t.publicResultsUrl ? `${t.publicResultsUrl.replace(/\/$/, '')}/match/{id}` : null,
       });
     }
   }
@@ -108,15 +210,18 @@ async function discoverTournaments(source, log) {
   return [...tids];
 }
 
-export async function scrapeCupManager(source, log) {
+export async function scrapeCupManager(source, log, { cacheDir } = {}) {
   const base = source.base.replace(/\/$/, '');
   const tids = await discoverTournaments(source, log);
   log(`  ${tids.length} seasons/events found`);
   const lines = [];
+  const known = new Map();
   let failures = 0;
   for (const tid of tids) {
     try {
-      const got = linesFromTournament(await call(base, tid, PLAYERS_QUERY(tid)), tid, base);
+      const responses = await call(base, tid, PLAYERS_QUERY(tid));
+      known.set(String(tid), finishedMatchIds(responses));
+      const got = linesFromTournament(responses, tid, base);
       if (got.length) log(`  ${got[0].season}: ${got.length} player lines`);
       lines.push(...got);
     } catch (err) {
@@ -125,5 +230,13 @@ export async function scrapeCupManager(source, log) {
     }
   }
   if (!lines.length && failures) throw new Error(`all ${failures} season requests failed`);
+  if (cacheDir && lines.length) {
+    const file = join(cacheDir, source.id, 'matches.json');
+    const matches = await loadMatches(file);
+    const fetched = await crawlMatches(base, known, matches, file, log);
+    await saveMatches(file, matches);
+    attachGames(lines, matches);
+    log(`  box scores: ${matches.size} matches cached (${fetched} fetched this run)`);
+  }
   return { lines, method: 'Cup Manager results API' };
 }

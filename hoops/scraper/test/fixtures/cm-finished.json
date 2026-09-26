@@ -1,0 +1,26 @@
+{
+ "responses": {
+  "Tournament({id:900})": {
+   "entity": {
+    "__typename": "Tournament",
+    "finishedMatches": {
+     "href": "Tournament({id:900})$finishedMatches"
+    }
+   }
+  },
+  "Tournament({id:900})$finishedMatches": {
+   "entity": [
+    {
+     "href": "Match({id:5002})"
+    }
+   ]
+  },
+  "Match({id:5002})": {
+   "entity": {
+    "__typename": "Match",
+    "id": 5002,
+    "finished": true
+   }
+  }
+ }
+}
