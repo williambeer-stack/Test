@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +25,14 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: hoops/scraper/package-lock.json
+      # Box-score and per-source caches carry over between runs, so after the first
+      # (full history) run each scrape only fetches what changed.
+      - name: Restore scrape cache
+        uses: actions/cache/restore@v4
+        with:
+          path: hoops/data/cache
+          key: hoops-cache-${{ github.run_id }}
+          restore-keys: hoops-cache-
       - name: Install scraper
         working-directory: hoops/scraper
         run: npm ci
@@ -34,26 +42,22 @@ jobs:
       - name: Scrape
         working-directory: hoops/scraper
         run: npm run scrape
-      - name: Commit updated stats
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hoops/data/players.json
-          if git diff --cached --quiet; then
-            echo "No changes"
-          else
-            git commit -m "Update Sydney basketball stats"
-            git push
-          fi
+      - name: Save scrape cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: hoops/data/cache
+          key: hoops-cache-${{ github.run_id }}
+      - name: Leave caches out of the published site
+        run: rm -rf hoops/data/cache hoops/scraper
       - uses: actions/upload-pages-artifact@v3
         with:
           path: hoops
 
   deploy:
-    # Needs Settings -> Pages -> Source set to "GitHub Actions". Skipped quietly if it isn't.
+    # Needs Settings -> Pages -> Source set to "GitHub Actions".
     needs: scrape
     runs-on: ubuntu-latest
-    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

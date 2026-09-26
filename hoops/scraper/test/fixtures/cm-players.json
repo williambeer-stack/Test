@@ -1,0 +1,179 @@
+{
+ "responses": {
+  "Tournament({id:900})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Tournament",
+    "fullname": "The U League 2026 (Season 1)",
+    "publicResultsUrl": "https://ul.test/2026,1,en/result/",
+    "lotCategories": {
+     "href": "Tournament({id:900})$lotCategories"
+    }
+   }
+  },
+  "Tournament({id:900})$lotCategories": {
+   "cachetags": [],
+   "entity": [
+    {
+     "href": "Category({categoryId:50,tournamentId:900})"
+    },
+    {
+     "href": "Category({categoryId:51,tournamentId:900})"
+    }
+   ]
+  },
+  "Category({categoryId:50,tournamentId:900})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Category",
+    "name": "Sydney Uni - Division 1",
+    "shortName": "Sydney Uni - Division 1",
+    "gender": "men",
+    "hidePlayers": false,
+    "registerRebounds": true,
+    "registerSteals": true,
+    "registerBlocks": true,
+    "topPlayers": {
+     "href": "Category({categoryId:50,tournamentId:900})$topPlayers"
+    }
+   }
+  },
+  "Category({categoryId:51,tournamentId:900})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Category",
+    "name": "Concord Wednesdays",
+    "hidePlayers": false,
+    "registerRebounds": false,
+    "topPlayers": {
+     "href": "Category({categoryId:51,tournamentId:900})$topPlayers"
+    }
+   }
+  },
+  "Category({categoryId:50,tournamentId:900})$topPlayers": {
+   "cachetags": [],
+   "entity": [
+    {
+     "href": "Player({id:1})"
+    },
+    {
+     "href": "Player({id:2})"
+    }
+   ]
+  },
+  "Category({categoryId:51,tournamentId:900})$topPlayers": {
+   "cachetags": [],
+   "entity": [
+    {
+     "href": "Player({id:3})"
+    }
+   ]
+  },
+  "Player({id:1})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Player",
+    "name": "Ava Example",
+    "number": "7",
+    "stats": {
+     "__typename": "Player$PlayerStatistics",
+     "yellowCards": 0,
+     "greenCards": 0,
+     "redCards": 0,
+     "totalPoints": 141,
+     "totalAssists": 20,
+     "rebounds": 40,
+     "steals": 9,
+     "blockedShots": 3,
+     "games": 7,
+     "mvp": 0
+    },
+    "team": {
+     "href": "Team({id:70})"
+    }
+   }
+  },
+  "Player({id:2})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Player",
+    "name": "Zed Nobody",
+    "number": "9",
+    "stats": {
+     "__typename": "Player$PlayerStatistics",
+     "yellowCards": 0,
+     "greenCards": 0,
+     "redCards": 0,
+     "totalPoints": 0,
+     "totalAssists": 0,
+     "rebounds": 0,
+     "steals": 0,
+     "blockedShots": 0,
+     "games": 0,
+     "mvp": 0
+    },
+    "team": {
+     "href": "Team({id:70})"
+    }
+   }
+  },
+  "Player({id:3})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Player",
+    "name": "Mia Placeholder",
+    "number": "4",
+    "stats": {
+     "__typename": "Player$PlayerStatistics",
+     "yellowCards": 0,
+     "greenCards": 0,
+     "redCards": 0,
+     "totalPoints": 98,
+     "totalAssists": 5,
+     "rebounds": 0,
+     "steals": 2,
+     "blockedShots": 0,
+     "games": 6,
+     "mvp": 0
+    },
+    "team": {
+     "href": "Team({id:71})"
+    }
+   }
+  },
+  "Team({id:70})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Team",
+    "name": {
+     "__typename": "Team$TeamName",
+     "fullName": "Airballers Sydney Uni - Division 1",
+     "clubName": "Airballers",
+     "categoryName": "Sydney Uni - Division 1"
+    },
+    "club": {
+     "href": "NameClub({id:80})"
+    }
+   }
+  },
+  "Team({id:71})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "Team",
+    "name": {
+     "__typename": "Team$TeamName",
+     "fullName": "Swishers Concord Wednesdays",
+     "clubName": "Swishers"
+    }
+   }
+  },
+  "NameClub({id:80})": {
+   "cachetags": [],
+   "entity": {
+    "__typename": "NameClub",
+    "name": "Airballers",
+    "id": 80
+   }
+  }
+ }
+}

@@ -1,0 +1,158 @@
+[
+ {
+  "id": 10,
+  "date": "2025-03-01T19:00:00",
+  "modified": "2025-03-02T10:00:00",
+  "link": "https://ssb.test/match/10/",
+  "division_name": "Glebe Tuesday (Mens) 2025 S1",
+  "acf": {
+   "statistics": [
+    {
+     "player": {
+      "ID": 101,
+      "user_firstname": "Ava",
+      "user_lastname": "Example",
+      "nickname": "Ava",
+      "user_nicename": "avaex",
+      "display_name": "Ava Example",
+      "user_url": "",
+      "user_registered": "2024-01-01 00:00:00",
+      "user_description": ""
+     },
+     "points": "20",
+     "rebounds": "5",
+     "assists": "3",
+     "steals": "1",
+     "blocks": "0",
+     "1st_half_fouls": 0,
+     "2nd_half_fouls": 0
+    },
+    {
+     "player": {
+      "ID": 102,
+      "user_firstname": "Ben",
+      "user_lastname": "Sample",
+      "nickname": "Ben",
+      "user_nicename": "bensample",
+      "display_name": "Ben Sample",
+      "user_url": "",
+      "user_registered": "2024-01-01 00:00:00",
+      "user_description": ""
+     },
+     "points": "8",
+     "rebounds": "10",
+     "assists": "1",
+     "steals": "0",
+     "blocks": "2",
+     "1st_half_fouls": 0,
+     "2nd_half_fouls": 0
+    },
+    {
+     "player": {
+      "ID": 103,
+      "user_firstname": "Cal",
+      "user_lastname": "Demo",
+      "nickname": "Cal",
+      "user_nicename": "caldemo",
+      "display_name": "Cal Demo",
+      "user_url": "",
+      "user_registered": "2024-01-01 00:00:00",
+      "user_description": ""
+     },
+     "points": "12",
+     "rebounds": "2",
+     "assists": "4",
+     "steals": "2",
+     "blocks": "0",
+     "1st_half_fouls": 0,
+     "2nd_half_fouls": 0
+    }
+   ],
+   "home_team": {
+    "ID": 1,
+    "post_title": "Hoop Troop"
+   },
+   "away_team": {
+    "ID": 2,
+    "post_title": "Net Gains"
+   }
+  }
+ },
+ {
+  "id": 11,
+  "date": "2025-03-08T19:00:00",
+  "modified": "2025-03-09T10:00:00",
+  "link": "https://ssb.test/match/11/",
+  "division_name": "Glebe Tuesday (Mens) 2025 S1",
+  "acf": {
+   "statistics": [
+    {
+     "player": {
+      "ID": 101,
+      "user_firstname": "Ava",
+      "user_lastname": "Example",
+      "nickname": "Ava",
+      "user_nicename": "avaex",
+      "display_name": "Ava Example",
+      "user_url": "",
+      "user_registered": "2024-01-01 00:00:00",
+      "user_description": ""
+     },
+     "points": "14",
+     "rebounds": "7",
+     "assists": "2",
+     "steals": "0",
+     "blocks": "1",
+     "1st_half_fouls": 0,
+     "2nd_half_fouls": 0
+    },
+    {
+     "player": {
+      "ID": 104,
+      "user_firstname": "Dee",
+      "user_lastname": "Test",
+      "nickname": "Dee",
+      "user_nicename": "deetest",
+      "display_name": "Dee Test",
+      "user_url": "",
+      "user_registered": "2024-01-01 00:00:00",
+      "user_description": ""
+     },
+     "points": "9",
+     "rebounds": "3",
+     "assists": "0",
+     "steals": "1",
+     "blocks": "",
+     "1st_half_fouls": 0,
+     "2nd_half_fouls": 0
+    }
+   ],
+   "home_team": {
+    "ID": 3,
+    "post_title": "Brick Layers"
+   },
+   "away_team": {
+    "ID": 1,
+    "post_title": "Hoop Troop"
+   }
+  }
+ },
+ {
+  "id": 12,
+  "date": "2025-03-15T19:00:00",
+  "modified": "2025-03-15T09:00:00",
+  "link": "https://ssb.test/match/12/",
+  "division_name": "Glebe Tuesday (Mens) 2025 S1",
+  "acf": {
+   "statistics": false,
+   "home_team": {
+    "ID": 1,
+    "post_title": "Hoop Troop"
+   },
+   "away_team": {
+    "ID": 3,
+    "post_title": "Brick Layers"
+   }
+  }
+ }
+]

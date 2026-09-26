@@ -34,15 +34,42 @@
   let playerById = new Map();
   let enabled = new Set();
 
+  const TOTAL_KEYS = ['gp', 'pts', 'reb', 'ast', 'stl', 'blk'];
+
+  // Per-source totals for a list of stat lines, in the same shape as index.json.
+  function sourceTotals(entries) {
+    const out = {};
+    for (const e of entries) {
+      const t = (out[e.src] ??= TOTAL_KEYS.map(() => 0));
+      TOTAL_KEYS.forEach((k, i) => { t[i] += e[k] ?? 0; });
+    }
+    return out;
+  }
+
+  // index.json: { sources, shards, players: [[id, name, teams, {src: [gp, pts, reb, ast, stl, blk]}]] }
+  // players/<n>.json: { id: [stat lines] }. demo.json carries every player's lines inline.
+  async function fetchJson(url) {
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+    return res.json();
+  }
+
   async function load() {
     $('#demoBanner').hidden = !demo;
     try {
-      const res = await fetch(demo ? 'data/demo.json' : 'data/players.json', { cache: 'no-cache' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      data = await res.json();
+      if (demo) {
+        const d = await fetchJson('data/demo.json');
+        data = { ...d, players: d.players.map((p) => ({ ...p, teams: [...new Set(p.entries.map((e) => e.team))].slice(0, 3).join(', '), totals: sourceTotals(p.entries) })) };
+      } else {
+        const d = await fetchJson('data/index.json');
+        data = { ...d, players: d.players.map(([id, name, teams, totals]) => ({ id, name, teams, totals })) };
+      }
     } catch (err) {
-      $('#view').innerHTML = `<div class="empty-state"><h2>Couldn't load the stats file</h2><p>${esc(err.message)}. If you opened this page straight from disk, serve the folder instead, for example <code>npx serve hoops</code>.</p></div>`;
-      return;
+      if (err.status === 404) data = { sources: [], players: [] };
+      else {
+        $('#view').innerHTML = `<div class="empty-state"><h2>Couldn't load the stats file</h2><p>${esc(err.message)}. If you opened this page straight from disk, serve the folder instead, for example <code>npx serve hoops</code>.</p></div>`;
+        return;
+      }
     }
     for (const p of data.players) p.key = norm(p.name);
     sourceById = new Map(data.sources.map((s) => [s.id, s]));
@@ -56,6 +83,29 @@
   }
 
   const visibleEntries = (p) => p.entries.filter((e) => enabled.has(e.src));
+  const visibleSources = (p) => Object.keys(p.totals).filter((src) => enabled.has(src));
+
+  // Career summary over the selected competitions, from the index totals.
+  function summary(p) {
+    const t = { comps: visibleSources(p).length };
+    TOTAL_KEYS.forEach((k, i) => { t[k] = visibleSources(p).reduce((sum, src) => sum + p.totals[src][i], 0); });
+    for (const [k, label] of Object.entries(PER_GAME)) t[label] = t.gp ? t[k] / t.gp : null;
+    return t;
+  }
+
+  const shardCache = new Map();
+  function shardOf(id) {
+    let h = 0;
+    for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return h % (data.shards || 64);
+  }
+  async function loadEntries(p) {
+    if (p.entries) return p.entries;
+    const n = shardOf(p.id);
+    if (!shardCache.has(n)) shardCache.set(n, fetchJson(`data/players/${n}.json`));
+    p.entries = (await shardCache.get(n))[p.id] ?? [];
+    return p.entries;
+  }
 
   function totals(entries) {
     const t = { comps: new Set(), teams: new Set() };
@@ -126,14 +176,14 @@
     const terms = nq.split(' ');
     const out = [];
     for (const p of data.players) {
-      if (!visibleEntries(p).length) continue;
+      if (!visibleSources(p).length) continue;
       const words = p.key.split(' ');
       if (!terms.every((t) => words.some((w) => w.startsWith(t)) || p.key.includes(t))) continue;
       let score = 0;
       if (p.key === nq) score += 100;
       if (p.key.startsWith(nq)) score += 50;
       score += terms.filter((t) => words.some((w) => w.startsWith(t))).length * 10;
-      score += Math.min(visibleEntries(p).length, 9);
+      score += Math.min(summary(p).gp, 9);
       out.push([score, p]);
     }
     return out.sort((a, b) => b[0] - a[0] || a[1].name.localeCompare(b[1].name)).slice(0, 12).map((x) => x[1]);
@@ -154,9 +204,8 @@
     if (!q.trim()) { closeList(); return; }
     list.innerHTML = matches.length
       ? matches.map((p, i) => {
-          const e = visibleEntries(p);
-          const teams = [...new Set(e.map((x) => x.team).filter(Boolean))].slice(0, 2).join(', ');
-          const comps = new Set(e.map((x) => x.src)).size;
+          const teams = p.teams;
+          const comps = visibleSources(p).length;
           return `<li role="option" id="opt-${i}" data-id="${esc(p.id)}" aria-selected="${i === active}">
             <span class="s-name">${highlight(p.name, q)}</span>
             <span class="s-meta">${esc(teams)}${teams ? ' · ' : ''}${comps} comp${comps === 1 ? '' : 's'}</span></li>`;
@@ -203,8 +252,12 @@
   function route() {
     const m = /^#\/player\/(.+)$/.exec(location.hash);
     const player = m && playerById.get(decodeURIComponent(m[1]));
-    if (player) renderPlayer(player);
-    else renderHome();
+    if (!player) return renderHome();
+    if (player.entries) return renderPlayer(player);
+    $('#view').innerHTML = `<a class="back" href="#/">← All players</a><div class="card empty-state"><h2>${esc(player.name)}</h2><p>Loading stats…</p></div>`;
+    loadEntries(player)
+      .then(() => { if (location.hash === m[0]) renderPlayer(player); })
+      .catch((err) => { $('#view').innerHTML = `<a class="back" href="#/">← All players</a><div class="card empty-state"><h2>${esc(player.name)}</h2><p>Couldn't load stats: ${esc(err.message)}</p></div>`; });
   }
   window.addEventListener('hashchange', () => { route(); window.scrollTo({ top: 0 }); });
 
@@ -217,11 +270,11 @@
     if (!data.players.length) {
       view.innerHTML = `<div class="card empty-state">
         <h2>No stats scraped yet</h2>
-        <p>The stats file is empty. Run the scraper (<code>cd hoops/scraper && npm install && npm run scrape</code>) or trigger the <strong>Scrape Sydney basketball stats</strong> GitHub Action. Want to look around first? <a href="?demo=1">Open the demo</a>.</p>
+        <p>Nothing has been scraped yet. Run the scraper (<code>cd hoops/scraper && npm install && npm run scrape</code>) or trigger the <strong>Scrape Sydney basketball stats</strong> GitHub Action. Want to look around first? <a href="?demo=1">Open the demo</a>.</p>
       </div>`;
       return;
     }
-    const rows = data.players.map((p) => ({ p, t: totals(visibleEntries(p)) })).filter((r) => r.t.comps.size);
+    const rows = data.players.map((p) => ({ p, t: summary(p) })).filter((r) => r.t.comps);
     const perGameSort = Object.values(PER_GAME).includes(leaderSort);
     const eligible = rows.filter((r) => !perGameSort || (r.t.gp ?? 0) >= MIN_GAMES);
     const val = (r) => r.t[leaderSort] ?? -1;
@@ -233,8 +286,8 @@
     view.innerHTML = `
       <div class="tiles">
         ${tile('Players', fmt(rows.length))}
-        ${tile('Competitions', fmt(new Set(rows.flatMap((r) => [...r.t.comps])).size))}
-        ${tile('Stat lines', fmt(rows.reduce((s, r) => s + visibleEntries(r.p).length, 0)))}
+        ${tile('Leagues', fmt(data.sources.filter((s) => enabled.has(s.id) && s.entries).length))}
+        ${tile('Stat lines', fmt(data.sources.filter((s) => enabled.has(s.id)).reduce((sum, s) => sum + (s.entries || 0), 0)))}
       </div>
       <div class="card">
         <h2>Leaders across all selected comps</h2>
@@ -244,7 +297,7 @@
           <tbody>${top.map((r, i) => `<tr>
             <td class="l">${i + 1}</td>
             <td class="l"><a class="row-link" href="#/player/${encodeURIComponent(r.p.id)}">${esc(r.p.name)}</a></td>
-            <td class="l">${esc([...r.t.teams].slice(0, 2).join(', '))}${r.t.teams.size > 2 ? ` +${r.t.teams.size - 2}` : ''}</td>
+            <td class="l">${esc(r.p.teams)}</td>
             <td>${fmt(r.t.gp)}</td><td>${fmt(r.t.pts)}</td><td>${fmt(r.t.PPG, 1)}</td><td>${fmt(r.t.RPG, 1)}</td><td>${fmt(r.t.APG, 1)}</td>
           </tr>`).join('')}</tbody>
         </table></div>

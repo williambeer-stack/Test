@@ -2,8 +2,8 @@
 // requests, retries on transient errors, and a basic robots.txt check.
 
 const UA = 'SydneyHoopsStatsBot/1.0 (+https://github.com/williambeer-stack/test; community stats aggregator)';
-const DELAY_MS = Number(process.env.SCRAPE_DELAY_MS ?? 400);
-const TIMEOUT_MS = 20000;
+const DELAY_MS = Number(process.env.SCRAPE_DELAY_MS ?? 750);
+const TIMEOUT_MS = Number(process.env.SCRAPE_TIMEOUT_MS ?? 60000);
 
 const hostQueues = new Map();
 const robotsCache = new Map();
@@ -93,10 +93,17 @@ export async function getText(url) {
 
 export async function getJson(url) {
   const res = await request(url, 'application/json');
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  const type = res.headers.get('content-type') || '';
-  if (!type.includes('json')) throw new Error(`Expected JSON from ${url}, got ${type}`);
-  return { json: await res.json(), headers: res.headers };
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} for ${url}`);
+    err.status = res.status;
+    throw err;
+  }
+  const text = await res.text();
+  try {
+    return { json: JSON.parse(text), headers: res.headers };
+  } catch {
+    throw new Error(`Expected JSON from ${url}, got ${res.headers.get('content-type')}: ${text.slice(0, 80)}`);
+  }
 }
 
 // Run fn over items with limited concurrency (per-host serialisation still applies).
