@@ -3,14 +3,10 @@
     "id": "ssb",
     "name": "Sydney Social Basketball",
     "short": "SSB",
-    "type": "sportspress",
+    "type": "ssb",
     "base": "https://sydneysocialbasketball.com.au",
     "home": "https://sydneysocialbasketball.com.au/",
-    "indexPages": [
-      "https://sydneysocialbasketball.com.au/"
-    ],
-    "listLinkPattern": "/(list|stats|statistics|player-stats)/",
-    "playerLinkPattern": "/player/[^/]+/?$"
+    "maxPagesPerRun": 700
   },
   {
     "id": "uleague",
@@ -19,30 +15,8 @@
     "type": "cupmanager",
     "base": "https://theuleague.au",
     "home": "https://theuleague.au/",
-    "indexPages": [
-      "https://theuleague.au/",
-      "https://theuleague.au/2026,63336487/result/categories"
-    ],
-    "editions": [
-      "2026,61202976",
-      "2026,63336487",
-      "2026,63336475",
-      "2026,61703971"
-    ],
-    "minYear": 2024
-  },
-  {
-    "id": "uleague-archive",
-    "name": "The U League (archive, theuleague.org.au)",
-    "short": "UL old",
-    "type": "sportspress",
-    "base": "https://www.theuleague.org.au",
-    "home": "https://www.theuleague.org.au/",
-    "indexPages": [
-      "https://www.theuleague.org.au/player-stats/",
-      "https://www.theuleague.org.au/"
-    ],
-    "listLinkPattern": "/player-stats/[^/]+/?$",
-    "prefer": "lists"
+    "indexPages": ["https://theuleague.au/"],
+    "editions": ["2026,61202976", "2026,63336487"],
+    "minYear": 2020
   }
 ]

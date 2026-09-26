@@ -1,0 +1,1 @@
+{"responses":{"Tournament({id:900})":{"entity":{"cup":{"href":"Cup({id:5})"}}},"Cup({id:5})$editions":{"entity":[{"href":"Tournament({id:900})"},{"href":"Tournament({id:901})"}]}}}

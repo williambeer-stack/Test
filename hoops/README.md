@@ -2,34 +2,34 @@
 
 Look up any player by name and see their stats across Sydney local basketball competitions in one place.
 
-| Source | Site | How it's scraped |
+| Source | Site | How it's collected |
 |---|---|---|
-| Sydney Social Basketball | sydneysocialbasketball.com.au | SportsPress REST API (`/wp-json/sportspress/v2/players`), falling back to player profile pages found in the sitemap |
-| The U League | theuleague.au | Cup Manager statistics pages (`/<year>,<edition>/result/statistics` and per-category pages) |
-| The U League (archive) | theuleague.org.au | SportsPress `/player-stats/<division>/` list pages |
+| Sydney Social Basketball | sydneysocialbasketball.com.au | WordPress REST API (`/wp-json/wp/v2/match`): every match's box score. Stats are summed per player per division. A player's team is the one present in all their games. |
+| The U League | theuleague.au | Cup Manager results API (`/rest/results_api/call`): season totals for every player in every division. |
 
-Sources are configured in [`scraper/sources.json`](scraper/sources.json). To add another competition that runs on SportsPress or Cup Manager, add an entry there. For a different platform, add a module in `scraper/lib/` and register it in `scrape.mjs`.
+Sources are configured in [`scraper/sources.json`](scraper/sources.json). To add a competition on another platform, add a module in `scraper/lib/` and register it in `scrape.mjs`.
 
 ## Run it
 
 ```bash
 cd hoops/scraper
 npm install
-npm test          # parser + crawler tests against local fixtures
-npm run scrape    # writes ../data/players.json (npm run scrape -- ssb  scrapes a single source)
-cd .. && npx serve .   # or: python3 -m http.server
+npm test              # parsers and crawlers against local fixtures
+npm run scrape        # writes ../data/index.json and ../data/players/*.json
+cd .. && npx serve .  # or: python3 -m http.server
 ```
 
-Open `http://localhost:3000/?demo=1` to try the site with made-up demo data.
+The first Sydney Social Basketball scrape loads its whole match history (about 500 API pages) and takes a while. After that, runs only fetch matches changed since the last one. Open `http://localhost:3000/?demo=1` to try the site with made-up data.
 
 ## How it works
 
-- **Scraper** (`scraper/`): Node 18+ and cheerio. Requests are polite: one at a time per site with a delay, retries, a descriptive User-Agent, and `robots.txt` is honoured. Column headers are matched against synonyms (`PTS`/`Points`, `GP`/`Games`/`Apps`, …), so small layout changes don't break it. If a source fails, its previous data is kept and flagged as older data on the site.
-- **Data** (`data/players.json`): every stat line is grouped under a player, matched by normalised name (case, accents and punctuation ignored).
-- **Site** (`index.html`, `app.js`, `styles.css`): static, with no build step. It has name search with keyboard navigation, a leaders table, and a player page with career totals, per-game averages, a points-per-game chart and every competition line linked back to its source. Player pages have shareable URLs (`#/player/<id>`).
-- **Automation** (`.github/workflows/hoops-scrape.yml`): scrapes daily, commits the updated `players.json`, and deploys `hoops/` to GitHub Pages. Enable Pages with *Settings → Pages → Source: GitHub Actions*. Scheduled runs only fire once the workflow is on the default branch.
+- **Scraper** (`scraper/`): Node 18+. Requests are polite: one at a time per site with a delay, retries, a descriptive User-Agent, and `robots.txt` is honoured. Only names, profile links and stats are kept. If a source fails, its last good data is reused and flagged as older data on the site.
+- **Data** (`data/`, generated, not committed): `index.json` holds every player's name, teams and per-league totals, which is enough for search and leaders. `players/<n>.json` holds each player's individual lines and is loaded when you open a player. Players are matched across leagues by normalised name (case, accents and punctuation ignored).
+- **Site** (`index.html`, `app.js`, `styles.css`): static, with no build step.
+- **Automation** (`.github/workflows/hoops-scrape.yml`): scrapes daily, keeps the caches in the GitHub Actions cache, and deploys `hoops/` to GitHub Pages. Enable Pages with *Settings → Pages → Source: GitHub Actions*.
 
 ## Caveats
 
-- Players are matched by name. Two people with the same name will be merged, and one person whose name is spelt differently between leagues shows up twice.
-- Only stats the leagues publish publicly can be shown. Check each competition's terms before publishing the site widely.
+- Players are matched by name. Two people with the same name are merged, and one person whose name is spelt differently between leagues shows up twice.
+- Sydney Social Basketball box scores don't record which team a player was on. When a player has only played one game in a division, both teams are shown.
+- Only stats the leagues publish publicly are shown. Check each competition's terms before publishing the site widely.

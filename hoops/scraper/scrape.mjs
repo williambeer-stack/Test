@@ -1,45 +1,61 @@
 #!/usr/bin/env node
-// Scrape every source in sources.json and write ../data/players.json.
-// Usage: node scrape.mjs [sourceId ...]
-// If a source fails, its entries from the previous run are kept and marked stale.
+// Scrape every source in sources.json and write the site's data files:
+//   ../data/index.json, ../data/players/<n>.json
+// Per-source caches live in ../data/cache (kept between runs by the GitHub Action).
+// If a source fails, its lines from the last successful run are reused and marked stale.
+// Usage: node scrape.mjs [sourceId ...]   (other sources are served from cache)
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { scrapeSportsPress } from './lib/sportspress.mjs';
+import { scrapeSsb } from './lib/ssb.mjs';
 import { scrapeCupManager } from './lib/cupmanager.mjs';
 import { buildDataset } from './lib/dataset.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
-const OUT = here('../data/players.json');
-const SCRAPERS = { sportspress: scrapeSportsPress, cupmanager: scrapeCupManager };
+const DATA = here('../data/');
+const CACHE = here('../data/cache/');
+const SCRAPERS = { ssb: scrapeSsb, cupmanager: scrapeCupManager };
 
 const sources = JSON.parse(await readFile(here('./sources.json'), 'utf8'));
 const only = process.argv.slice(2);
-let previous = null;
-try { previous = JSON.parse(await readFile(OUT, 'utf8')); } catch { /* first run */ }
+await mkdir(CACHE, { recursive: true });
+
+async function readLinesCache(id) {
+  try { return JSON.parse(await readFile(`${CACHE}${id}-lines.json`, 'utf8')); } catch { return null; }
+}
 
 const results = [];
 for (const source of sources) {
-  if (only.length && !only.includes(source.id)) continue;
-  let lastProblem = null;
-  const log = (msg) => {
-    if (/^\s*(!|REST API unavailable)/.test(msg)) lastProblem = msg.trim().replace(/^!\s*/, '');
-    console.log(`[${source.id}] ${msg}`);
-  };
+  const log = (msg) => console.log(`[${source.id}] ${msg}`);
+  const cached = await readLinesCache(source.id);
+  if (only.length && !only.includes(source.id)) {
+    results.push({ source, ok: !!cached, method: cached?.method, error: cached ? null : 'not scraped yet', lines: cached?.lines ?? [], scrapedAt: cached?.scrapedAt });
+    continue;
+  }
   log(`scraping ${source.base}`);
   const started = Date.now();
   try {
-    const { lines, method } = await SCRAPERS[source.type](source, log);
-    if (!lines.length) throw new Error(lastProblem ? `no player stats found; last error: ${lastProblem}` : 'no player stats found (page layout may have changed)');
-    log(`${lines.length} stat lines via ${method} in ${Math.round((Date.now() - started) / 1000)}s`);
-    results.push({ source, ok: true, method, lines });
+    const { lines, method, error } = await SCRAPERS[source.type](source, log, { cacheDir: CACHE });
+    if (!lines.length) throw new Error(error || 'no player stats found (the site may have changed)');
+    const scrapedAt = new Date().toISOString();
+    log(`${lines.length} stat lines via ${method} in ${Math.round((Date.now() - started) / 1000)}s${error ? ` (with errors: ${error})` : ''}`);
+    await writeFile(`${CACHE}${source.id}-lines.json`, JSON.stringify({ scrapedAt, method, lines }));
+    results.push({ source, ok: !error, method, error, lines: error ? lines.map((l) => ({ ...l, stale: true })) : lines, scrapedAt });
   } catch (err) {
     log(`FAILED: ${err.message}`);
-    results.push({ source, ok: false, error: err.message, lines: [] });
+    results.push({
+      source, ok: false, error: err.message, method: cached?.method,
+      lines: (cached?.lines ?? []).map((l) => ({ ...l, stale: true })),
+      scrapedAt: cached?.scrapedAt,
+    });
   }
 }
 
-const dataset = buildDataset(results, previous, sources.filter((s) => only.length && !only.includes(s.id)));
-await writeFile(OUT, JSON.stringify(dataset) + '\n');
-console.log(`wrote ${dataset.players.length} players, ${dataset.sources.filter((s) => s.ok).length}/${dataset.sources.length} sources OK -> ${OUT}`);
-if (!dataset.sources.some((s) => s.ok || s.entries)) process.exitCode = 1;
+const { index, shards } = buildDataset(results);
+await rm(`${DATA}players`, { recursive: true, force: true });
+await mkdir(`${DATA}players`, { recursive: true });
+for (const [n, data] of shards) await writeFile(`${DATA}players/${n}.json`, JSON.stringify(data));
+await writeFile(`${DATA}index.json`, JSON.stringify(index));
+console.log(`wrote ${index.players.length} players; sources OK: ${index.sources.filter((s) => s.ok).map((s) => s.id).join(', ') || 'none'}`);
+for (const s of index.sources) if (!s.ok) console.log(`  ${s.id}: ${s.error}`);
+if (!index.players.length) process.exitCode = 1;
