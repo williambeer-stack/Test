@@ -86,7 +86,7 @@ a { color: var(--accent); }
 
 .topbar { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
 .topbar-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-weight: 700; font-size: 17px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-weight: 700; font-size: 17px; white-space: nowrap; }
 .brand em { font-style: normal; color: var(--accent); }
 .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; }
 .icon-btn:hover { color: var(--text); background: var(--surface-2); }
@@ -196,7 +196,7 @@ th button[aria-sort] { color: var(--text); }
 
 /* ---------- nav, buttons ---------- */
 .top-nav { display: flex; align-items: center; gap: 14px; }
-.top-nav a { color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 14px; }
+.top-nav a { color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 14px; white-space: nowrap; }
 .top-nav a:hover { color: var(--accent); }
 .btn {
   display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600;
@@ -221,7 +221,7 @@ td.loss { color: var(--bad); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- compare ---------- */
-.compare-tray { position: sticky; top: 56px; z-index: 9; background: var(--accent-soft); border-bottom: 1px solid var(--border); font-size: 14px; }
+.compare-tray { position: sticky; top: 57px; z-index: 9; background: var(--accent-soft); border-bottom: 1px solid var(--border); font-size: 14px; }
 .tray-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; padding-bottom: 8px; }
 .tray-actions { display: flex; gap: 8px; }
 .compare-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
@@ -256,5 +256,9 @@ td.loss { color: var(--bad); }
 .hbar-val { width: 36px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text); }
 @media (max-width: 600px) {
   .top-nav a { font-size: 13px; }
-  .compare-tray { top: 56px; }
+  .brand { font-size: 16px; gap: 8px; }
+  .top-nav { gap: 10px; }
+}
+@media (max-width: 380px) {
+  .brand span { display: none; }
 }
