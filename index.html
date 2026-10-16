@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script>
+// Applied before first paint so a saved theme or tab doesn't flash in after app.js loads.
+try{var d=document.documentElement,t=JSON.parse(localStorage.getItem("hss-theme")),b=JSON.parse(localStorage.getItem("hss-tab"));if(t)d.dataset.theme=t;if(b&&b!=="simulate")d.dataset.startTab=b}catch(e){}
+</script>
 </head>
 <body>
 <header class="topbar">
@@ -38,7 +42,11 @@
       <h1>Take your cut <span class="hl">before</span> the money lands.</h1>
       <p class="lede">Hybrid Split Settlement sits on top of bank acquiring rails. Each store keeps its own MID. A split engine takes out HQ royalties and onseller fees, then sends each party's share straight to its own BSB. No one holds merchant funds, and no one has to invoice.</p>
     </div>
-    <div class="hero-stats" id="heroStats"></div>
+    <div class="hero-stats" id="heroStats">
+      <div class="stat"><b>$28.5B</b><span>AU franchise + marketplace ecommerce TTV</span></div>
+      <div class="stat"><b>T+1</b><span>net settlement straight to every BSB</span></div>
+      <div class="stat"><b>$0</b><span>merchant funds held by HQ or processor</span></div>
+    </div>
   </div>
 
   <div class="wrap sim-grid">
@@ -96,7 +104,7 @@
       <div class="flow-head">
         <div>
           <h2 class="card-title">Live flow of funds</h2>
-          <p class="muted small" id="clockLine">Day 1 · 07:00 · trading</p>
+          <p class="muted small" id="clockLine">Day 1 · 07:00 · paused · 0 days settled</p>
         </div>
         <div class="player">
           <button class="btn primary" id="playBtn" aria-pressed="false"><span id="playIcon">▶</span> <span id="playLabel">Start trading</span></button>
@@ -148,6 +156,7 @@
       </div>
       <div class="table-scroll">
         <table class="ledger">
+          <colgroup><col style="width:11%"><col style="width:17%"><col style="width:18%"><col span="5" style="width:10.8%"></colgroup>
           <thead><tr><th>Time</th><th>Store / MID</th><th>Type</th><th class="num">Gross</th><th class="num">MSF</th><th class="num">HQ</th><th class="num">Onseller</th><th class="num">Store net</th></tr></thead>
           <tbody id="ledgerBody"><tr><td colspan="8" class="empty">Press <b>Start trading</b> to run a trading day.</td></tr></tbody>
         </table>

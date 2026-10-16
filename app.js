@@ -272,14 +272,14 @@
     svgEl('text', { x: 20, y: 20, class: 'lane-label' }, nodeLayer).textContent = S.net.hqLabel === 'Marketplace' ? 'Sellers · own MIDs' : 'Stores · own MIDs';
     svgEl('text', { x: 820, y: 20, class: 'lane-label' }, nodeLayer).textContent = 'Destination BSBs · T+1';
 
-    const acq = { x: 250, y: 160, w: 170, h: 100 };
+    const acq = { x: 245, y: 160, w: 180, h: 100 };
     const eng = { x: 500, y: 150, w: 190, h: 120 };
     const out = {
       store: { x: 800, y: 40, w: 185, h: 88, title: 'Store accounts', sub: `${stores.length} × net deposit` },
       hq: { x: 800, y: 176, w: 185, h: 88, title: S.net.hqLabel, sub: `${S.net.group} royalty` },
       ons: { x: 800, y: 312, w: 185, h: 88, title: 'Onseller', sub: S.net.onseller.name },
     };
-    const msfN = { x: 250, y: 330, w: 170, h: 70 };
+    const msfN = { x: 245, y: 330, w: 180, h: 70 };
 
     stores.forEach((st, i) => {
       const y = top + i * (chipH + gap);
@@ -324,7 +324,7 @@
   }
 
   function animate(st, e) {
-    if (document.hidden || !F.dotLayer) return;
+    if (document.hidden || !F.dotLayer || activeTab !== 'simulate') return;
     const sp = 1 / Math.min(3, Math.max(0.6, Math.sqrt(S.speed)));
     const T = 650 * sp;
     const r = Math.min(9, 3.5 + Math.sqrt(Math.abs(e.gross) / 100) / 2.2);
@@ -339,7 +339,7 @@
       particle(F.paths.store, 'var(--s-store)', T * 1.8, T, Math.max(3, r * 0.85));
       if (e.hq) particle(F.paths.hq, 'var(--s-hq)', T * 1.8, T, Math.max(3, r * 0.45));
       if (e.ons) particle(F.paths.ons, 'var(--s-onseller)', T * 1.8, T, 3);
-      setTimeout(() => { F.engine.classList.remove('pulse'); void F.engine.getBBox(); F.engine.classList.add('pulse'); }, T * 1.8);
+      setTimeout(pulseEngine, T * 1.8);
     } else {
       // clawbacks travel back from payees; refund funds return to the cardholder
       if (e.hq) particle(F.paths.hq, '', 0, T, 5, true, true);
@@ -348,6 +348,15 @@
       particle(F.paths.ae, '', T, T * 0.8, 7, true, true);
       particle(inPath, '', T * 1.8, T, 7, true, true);
     }
+  }
+
+  // One pulse at a time: restarting it on every sale made the engine strobe at higher speeds.
+  let pulseUntil = 0;
+  function pulseEngine() {
+    const now = performance.now();
+    if (now < pulseUntil) return;
+    pulseUntil = now + 500;
+    F.engine.classList.remove('pulse'); void F.engine.getBBox(); F.engine.classList.add('pulse');
   }
 
   function tickParticles(now) {
@@ -395,26 +404,26 @@
     $('#clockLine').textContent = `Day ${S.day} · ${clock(S.minute)} · ${S.minute >= DAY_MIN ? 'closed' : S.playing ? 'trading' : 'paused'} · ${S.days.length} day${S.days.length === 1 ? '' : 's'} settled`;
   }
 
+  // Only new events are added to the top, so each row's highlight runs to the end and
+  // rows the reader is looking at stay put.
   let ledgerTopId = 0;
   function renderLedger() {
-    if (!S.ledger.length) return;
-    const body = $('#ledgerBody');
+    if (!S.ledger.length || S.ledger[0].id === ledgerTopId) return;
+    const body = $('#ledgerBody'), scroller = body.closest('.table-scroll');
     const cell = (v, neg) => `<td class="num${v < 0 || neg ? ' neg' : ''}">${v ? money(v) : '—'}</td>`;
-    body.innerHTML = S.ledger.map(e => {
+    const fresh = S.ledger.filter(e => e.id > ledgerTopId);
+    const html = fresh.map(e => {
       const st = S.net.stores[e.store];
-      return `<tr class="${e.id > ledgerTopId ? 'new' : ''}"><td class="mono">D${e.day} ${e.time}</td><td>${esc(st.short)} <span class="muted mono">…${st.mid.slice(-4)}</span></td>` +
+      return `<tr class="new"><td class="mono">D${e.day} ${e.time}</td><td>${esc(st.short)} <span class="muted mono">…${st.mid.slice(-4)}</span></td>` +
         `<td><span class="type ${e.type}">${e.type}${e.ref ? ` #${e.ref}` : ''}</span></td>` +
         cell(e.gross) + cell(e.msf) + cell(e.hq) + cell(e.ons) + `<td class="num${e.net < 0 ? ' neg' : ''}"><b>${money(e.net)}</b></td></tr>`;
     }).join('');
+    if (!ledgerTopId) body.innerHTML = '';
+    const scrolled = scroller.scrollTop, before = body.offsetHeight;
+    body.insertAdjacentHTML('afterbegin', html);
+    while (body.rows.length > S.ledger.length) body.lastElementChild.remove();
+    if (scrolled) scroller.scrollTop = scrolled + body.offsetHeight - before;
     ledgerTopId = S.ledger[0].id;
-  }
-
-  function renderHero() {
-    $('#heroStats').innerHTML = [
-      ['$28.5B', 'AU franchise + marketplace ecommerce TTV'],
-      ['T+1', 'net settlement straight to every BSB'],
-      ['$0', 'merchant funds held by HQ or processor'],
-    ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
   }
 
   // ---------------------------------------------------------------- controls
@@ -451,7 +460,7 @@
   }
   function resetSim() {
     setPlaying(false);
-    S.day = 1; S.minute = 0; S.days = []; S.ledger = []; S.seq = 0; S.carry = {}; ledgerTopId = 0;
+    S.day = 1; S.minute = 0; S.days = []; S.ledger = []; S.seq = 0; S.carry = {}; ledgerTopId = 0; batchChoice = null;
     S.net.stores.forEach(s => { s.history = []; });
     S.live = newLive();
     $('#ledgerBody').innerHTML = '<tr><td colspan="8" class="empty">Press <b>Start trading</b> to run a trading day.</td></tr>';
@@ -595,12 +604,17 @@
     if (v === 'live' || !S.days.length) return null;
     return S.days.find(d => d.day === +v) || null;
   }
+  // null follows the latest settled batch; otherwise the batch the user picked.
+  let batchChoice = null;
   function renderOutputs() {
-    const sel = $('#batchDay'), prev = sel.value;
-    sel.innerHTML = S.days.map(d => `<option value="${d.day}">Day ${d.day} batch (T+1)</option>`).reverse().join('') +
-      '<option value="live">Today (live, not settled)</option>';
-    if (prev && [...sel.options].some(o => o.value === prev) && prev !== 'live') sel.value = prev;
-    else sel.value = S.days.length ? String(S.days[S.days.length - 1].day) : 'live';
+    const sel = $('#batchDay');
+    // Rebuild options only when a day settles, so an open dropdown isn't torn down mid-pick.
+    if (sel.options.length !== S.days.length + 1) {
+      sel.innerHTML = S.days.map(d => `<option value="${d.day}">Day ${d.day} batch (T+1)</option>`).reverse().join('') +
+        '<option value="live">Today (live, not settled)</option>';
+    }
+    const want = batchChoice ?? (S.days.length ? String(S.days[S.days.length - 1].day) : 'live');
+    sel.value = [...sel.options].some(o => o.value === want) ? want : 'live';
     renderPayout(); renderRecon();
   }
   function payoutRows() {
@@ -630,7 +644,7 @@
     $('#reconBody').innerHTML = S.net.stores.map((st, i) => `<tr><td>${esc(st.short)}</td>${tr(st.name, d.perStore[i])}</tr>`).join('');
     $('#reconFoot').innerHTML = `<tr><td>Total</td>${tr('Total', d.total)}</tr>`;
   }
-  $('#batchDay').addEventListener('change', () => { renderPayout(); renderRecon(); });
+  $('#batchDay').addEventListener('change', e => { batchChoice = e.target.value; renderPayout(); renderRecon(); });
 
   function download(name, rows) {
     const csv = rows.map(r => r.map(c => /[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : c).join(',')).join('\n');
@@ -734,11 +748,13 @@
       const d = it.v >= 0
         ? `M${bx},${y + 6} H${bx + bw - r} a${r},${r} 0 0 1 ${r},${r} V${y + rowH - 8 - r} a${r},${r} 0 0 1 -${r},${r} H${bx} Z`
         : `M${bx + bw},${y + 6} H${bx + r} a${r},${r} 0 0 0 -${r},${r} V${y + rowH - 8 - r} a${r},${r} 0 0 0 ${r},${r} H${bx + bw} Z`;
-      const lblX = it.v >= 0 ? x1 + 6 : x1 - 6;
+      // Negative values label to the left of the bar, unless that would run into the category label.
+      const roomLeft = x1 - 6 - (padL - 4) >= fmtK(it.v).length * 7.2;
+      const lblX = it.v >= 0 || !roomLeft ? Math.max(x1, x0) + 6 : x1 - 6;
       s += `<text class="lbl" x="${padL - 10}" y="${y + rowH / 2 + 3}" text-anchor="end"${it.kind === 'net' ? ' font-weight="700"' : ''}>${it.label}</text>`;
       s += `<rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}" fill="transparent" data-i="${i}"/>`;
       s += `<path class="bar" d="${d}" fill="${color[it.kind]}" data-i="${i}"/>`;
-      s += `<text class="val-t" x="${lblX}" y="${y + rowH / 2 + 3}" text-anchor="${it.v >= 0 ? 'start' : 'end'}">${fmtK(it.v)}</text>`;
+      s += `<text class="val-t" x="${lblX}" y="${y + rowH / 2 + 3}" text-anchor="${it.v >= 0 || !roomLeft ? 'start' : 'end'}">${fmtK(it.v)}</text>`;
     });
     s += `<line x1="${x(0)}" x2="${x(0)}" y1="${top - 6}" y2="${H - 6}" stroke="var(--text-2)" stroke-width="1"/></svg>`;
     s += `<div class="legend" style="margin-top:4px"><span><i class="sw" style="background:var(--s-store)"></i>Revenue</span><span><i class="sw" style="background:var(--s-hq)"></i>Cost</span><span><i class="sw" style="background:var(--accent)"></i>Net position</span></div><div class="tip" id="barTip"></div>`;
@@ -749,7 +765,9 @@
       if (!t) { tip.style.opacity = 0; return; }
       const it = items[+t.dataset.i], rb = box.getBoundingClientRect();
       tip.innerHTML = `<b>${it.label}</b>: ${it.v < 0 ? '−' : ''}$${Math.round(Math.abs(it.v)).toLocaleString()}<br>${esc(it.note)}`;
-      tip.style.left = `${e.clientX - rb.left}px`; tip.style.top = `${e.clientY - rb.top}px`; tip.style.opacity = 1;
+      tip.style.opacity = 1;
+      const half = tip.offsetWidth / 2;
+      tip.style.left = `${Math.min(rb.width - half, Math.max(half, e.clientX - rb.left))}px`; tip.style.top = `${e.clientY - rb.top}px`;
     });
     svg.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
   }
@@ -828,13 +846,24 @@
     if (!k) return;
     if (e.target.checked) checks[k] = true; else delete checks[k];
     store.set('hss-roadmap', checks);
-    renderStages();
+    e.target.closest('.check').classList.toggle('done', e.target.checked);
+    updateStageProgress();
   });
+  function updateStageProgress() {
+    STAGES.forEach((s, i) => {
+      const total = s.groups.flatMap(g => g[1]).length;
+      const done = Object.keys(checks).filter(k => k.startsWith(`${i}-`)).length;
+      const b = $(`[data-stage="${i}"]`);
+      $('.progress i', b).style.width = `${Math.round(done / total * 100)}%`;
+      $('.pct', b).textContent = `${done}/${total} done`;
+    });
+  }
 
   // ---------------------------------------------------------------- tabs & theme
   let activeTab = 'simulate';
   function showTab(name) {
     activeTab = name;
+    delete document.documentElement.dataset.startTab;
     $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
     $$('.panel').forEach(p => { p.hidden = p.id !== `tab-${name}`; });
     if (name === 'outputs') renderOutputs();
@@ -891,7 +920,6 @@
   Object.keys(BIZ).forEach(k => $('#' + k).addEventListener('input', renderBusiness));
   document.addEventListener('visibilitychange', () => { lastFrame = performance.now(); });
 
-  renderHero();
   applyPreset('qsr');
   renderBusiness();
   renderStages();

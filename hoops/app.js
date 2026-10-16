@@ -16,8 +16,7 @@
   const fmt = (n, d = 0) => (n == null || Number.isNaN(n) ? '–' : n.toLocaleString('en-AU', { minimumFractionDigits: d, maximumFractionDigits: d }));
 
   // ---------- theme ----------
-  const savedTheme = store.get('hoops-theme');
-  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+  // The saved theme is applied by an inline script in <head>, before first paint.
   $('#themeToggle').addEventListener('click', () => {
     const dark = document.documentElement.dataset.theme
       ? document.documentElement.dataset.theme === 'dark'
@@ -68,6 +67,7 @@
       if (err.status === 404) data = { sources: [], players: [] };
       else {
         $('#view').innerHTML = `<div class="empty-state"><h2>Couldn't load the stats file</h2><p>${esc(err.message)}. If you opened this page straight from disk, serve the folder instead, for example <code>npx serve hoops</code>.</p></div>`;
+        revealFooter();
         return;
       }
     }
@@ -80,7 +80,9 @@
     renderSourceFilter();
     renderSources();
     route();
+    revealFooter();
   }
+  function revealFooter() { $('#sources').hidden = false; $('#footer').hidden = false; }
 
   const visibleEntries = (p) => p.entries.filter((e) => enabled.has(e.src));
   const visibleSources = (p) => Object.keys(p.totals).filter((src) => enabled.has(src));
@@ -235,6 +237,7 @@
   }
 
   // Small search box on the compare page, sharing the main search's matching.
+  let refocusCompareSearch = false;
   function wireCompareSearch(box) {
     const inp = box.querySelector('input');
     const ul = box.querySelector('ul');
@@ -248,8 +251,11 @@
         ? found.map((p, i) => `<li role="option" data-id="${esc(p.id)}" aria-selected="${i === idx}"><span class="s-name">${highlight(p.name, inp.value)}</span><span class="s-meta">${esc(p.teams)}</span></li>`).join('')
         : `<li class="empty">No players match “${esc(inp.value)}”</li>`;
     };
-    const add = (id) => { location.hash = compareHref([...compareIds, id]); };
+    const add = (id) => { refocusCompareSearch = true; location.hash = compareHref([...compareIds, id]); };
     inp.addEventListener('input', paint);
+    inp.addEventListener('focus', () => { if (inp.value.trim()) paint(); });
+    inp.addEventListener('blur', () => { ul.hidden = true; });
+    if (refocusCompareSearch) { refocusCompareSearch = false; inp.focus(); }
     inp.addEventListener('keydown', (ev) => {
       if (ev.key === 'ArrowDown' && found.length) { ev.preventDefault(); idx = (idx + 1) % found.length; }
       else if (ev.key === 'ArrowUp' && found.length) { ev.preventDefault(); idx = (idx - 1 + found.length) % found.length; }
@@ -283,7 +289,9 @@
   let compareIds = [];
   const compareHref = (ids) => `#/compare/${ids.slice(-MAX_COMPARE).map(encodeURIComponent).join(',')}`;
 
+  let redrawCharts = null;
   function route() {
+    redrawCharts = null;
     const c = /^#\/compare\/?(.*)$/.exec(location.hash);
     if (c) {
       compareIds = c[1].split(',').map(decodeURIComponent).filter((id) => playerById.has(id)).slice(0, MAX_COMPARE);
@@ -300,7 +308,7 @@
       .then(() => { if (location.hash === m[0]) renderPlayer(player); })
       .catch((err) => { $('#view').innerHTML = `<a class="back" href="#/">← All players</a><div class="card empty-state"><h2>${esc(player.name)}</h2><p>Couldn't load stats: ${esc(err.message)}</p></div>`; });
   }
-  window.addEventListener('hashchange', () => { route(); window.scrollTo({ top: 0 }); });
+  window.addEventListener('hashchange', () => { closeList(); hideTip(); route(); window.scrollTo({ top: 0 }); });
 
   // ---------- home: leaders ----------
   let leaderSort = 'PPG';
@@ -424,15 +432,17 @@
         <div id="gameTable"></div>
       </div>` : ''}`;
     drawPpgChart(entries.filter((e) => e.gp && e.pts != null));
+    let paint = null;
     if (entries.some((e) => e.games?.length)) {
       let showAll = false;
-      const paint = () => {
+      paint = () => {
         const f = $('#gameFilter').value;
         renderGameLog(f === 'all' ? entries : [entries[Number(f)]], showAll, () => { showAll = true; paint(); });
       };
       $('#gameFilter').addEventListener('change', () => { showAll = false; paint(); });
       paint();
     }
+    redrawCharts = () => { drawPpgChart(entries.filter((e) => e.gp && e.pts != null)); paint?.(); };
   }
 
   // Flatten stat lines into games, newest first.
@@ -516,9 +526,12 @@
       wireCompare(view);
       return;
     }
-    view.innerHTML = `<a class="back" href="#/">← All players</a><div class="card"><h2>Compare players</h2><p class="sub">Loading game logs…</p></div>`;
-    try { await Promise.all(players.map(loadEntries)); } catch { /* show totals without game logs */ }
-    if (!location.hash.startsWith('#/compare')) return;
+    if (players.some((p) => !p.entries)) {
+      view.innerHTML = `<a class="back" href="#/">← All players</a><div class="card"><h2>Compare players</h2><p class="sub">Loading game logs…</p></div>`;
+      const hash = location.hash;
+      try { await Promise.all(players.map(loadEntries)); } catch { /* show totals without game logs */ }
+      if (location.hash !== hash) return;
+    }
 
     const sums = players.map(summary);
     const leader = (key) => {
@@ -677,8 +690,16 @@
       rect.addEventListener('mouseleave', hideTip);
     });
   }
+  // Height-only resizes (mobile URL bar showing/hiding) don't change the charts, so ignore them.
   let resizeTimer;
-  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (location.hash.startsWith('#/player/')) route(); }, 150); });
+  let lastWidth = innerWidth;
+  window.addEventListener('resize', () => {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => redrawCharts?.(), 150);
+  });
+  window.addEventListener('scroll', hideTip, { passive: true });
 
   load();
 })();
